@@ -402,6 +402,7 @@ button:disabled {
 
 .table-stage {
   position: relative;
+  z-index: 1;
   min-height: 100vh;
   overflow: hidden;
 }
@@ -415,6 +416,8 @@ button:disabled {
   display: block;
   width: 100%;
   height: 100%;
+  touch-action: none;
+  user-select: none;
 }
 
 .table-status {
@@ -569,6 +572,7 @@ button:disabled {
 
 .record-panel {
   display: grid;
+  min-width: 0;
   gap: 12px;
   border-top: 1px solid var(--line);
   padding-top: 18px;
@@ -588,6 +592,7 @@ button:disabled {
 
 .record-panel-header div {
   display: grid;
+  min-width: 0;
   gap: 3px;
 }
 
@@ -604,6 +609,7 @@ button:disabled {
 }
 
 .record-panel-header em {
+  max-width: 100%;
   border: 1px solid rgba(114, 214, 189, 0.32);
   border-radius: 999px;
   background: rgba(114, 214, 189, 0.1);
@@ -622,6 +628,7 @@ button:disabled {
 
 .record-item {
   display: grid;
+  min-width: 0;
   gap: 5px;
   border: 1px solid rgba(255, 235, 195, 0.14);
   border-radius: 8px;
@@ -640,6 +647,7 @@ button:disabled {
 .record-item > span {
   display: flex;
   min-width: 0;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }
@@ -663,6 +671,7 @@ button:disabled {
 
 .record-detail {
   display: grid;
+  min-width: 0;
   gap: 10px;
   border: 1px solid rgba(255, 235, 195, 0.14);
   border-radius: 8px;
@@ -672,6 +681,7 @@ button:disabled {
 
 .record-detail-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
@@ -1063,32 +1073,43 @@ button:disabled {
     grid-column: 1 / -1;
     display: grid;
     grid-template-columns: minmax(220px, 0.8fr) minmax(260px, 1.2fr);
+    grid-template-areas:
+      "header slots"
+      "context slots"
+      "helper card"
+      "completion completion"
+      "records records";
     max-height: none;
     border-top: 1px solid var(--line);
     border-left: 0;
   }
 
-  .reading-header,
+  .reading-header {
+    grid-area: header;
+  }
+
   .reading-context {
-    grid-column: 1;
+    grid-area: context;
   }
 
-  .slot-list,
-  .card-reading {
-    grid-column: 2;
-    grid-row: 1 / span 2;
+  .draw-helper {
+    grid-area: helper;
+  }
+
+  .slot-list {
+    grid-area: slots;
   }
 
   .card-reading {
-    grid-row: 3;
+    grid-area: card;
   }
 
   .completion-panel {
-    grid-column: 1 / -1;
+    grid-area: completion;
   }
 
   .record-panel {
-    grid-column: 1 / -1;
+    grid-area: records;
   }
 }
 
@@ -1113,8 +1134,14 @@ button:disabled {
   }
 
   .table-stage {
-    min-height: 560px;
+    z-index: 5;
+    min-height: clamp(520px, 72svh, 660px);
+    height: clamp(520px, 72svh, 660px);
     order: -1;
+    border-bottom: 1px solid var(--line);
+    background:
+      radial-gradient(circle at 50% 22%, rgba(242, 198, 109, 0.14), transparent 34%),
+      rgba(12, 10, 12, 0.68);
   }
 
   .table-status {

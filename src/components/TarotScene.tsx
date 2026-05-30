@@ -34,11 +34,17 @@ interface InteractiveCard {
   backTexture: THREE.CanvasTexture;
 }
 
+type HitTarget =
+  | { type: 'card'; index: number; distance: number }
+  | { type: 'deck'; distance: number }
+  | null;
+
 const cardWidth = 1.22;
 const cardHeight = 1.86;
 const cardDepth = 0.045;
 const easeOutCubic = (value: number) => 1 - Math.pow(1 - value, 3);
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 export default function TarotScene({
   activeIndex,
@@ -103,6 +109,9 @@ class SceneController {
   private readonly clock = new THREE.Clock();
   private readonly raycaster = new THREE.Raycaster();
   private readonly pointer = new THREE.Vector2(99, 99);
+  private readonly dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.35);
+  private readonly dragPosition = new THREE.Vector3();
+  private readonly dragTarget = new THREE.Vector3();
   private readonly deckGroup = new THREE.Group();
   private readonly deckPortal = new THREE.Group();
   private readonly cardsGroup = new THREE.Group();
@@ -121,6 +130,12 @@ class SceneController {
   private hoverIndex: number | null = null;
   private deckHovered = false;
   private canDraw = false;
+  private activePointerId: number | null = null;
+  private pressedDeck = false;
+  private draggingIndex: number | null = null;
+  private hasDragged = false;
+  private startClientX = 0;
+  private startClientY = 0;
   private disposed = false;
   private stateKey = '';
   private language: Locale = 'zh-TW';
@@ -159,8 +174,10 @@ class SceneController {
 
     window.addEventListener('resize', this.resize);
     this.renderer.domElement.addEventListener('pointermove', this.handlePointerMove);
+    this.renderer.domElement.addEventListener('pointerdown', this.handlePointerDown);
     this.renderer.domElement.addEventListener('pointerleave', this.handlePointerLeave);
-    this.renderer.domElement.addEventListener('click', this.handleClick);
+    window.addEventListener('pointerup', this.handlePointerUp);
+    window.addEventListener('pointercancel', this.handlePointerCancel);
 
     this.resize();
   }
@@ -225,8 +242,10 @@ class SceneController {
     cancelAnimationFrame(this.animationId);
     window.removeEventListener('resize', this.resize);
     this.renderer.domElement.removeEventListener('pointermove', this.handlePointerMove);
+    this.renderer.domElement.removeEventListener('pointerdown', this.handlePointerDown);
     this.renderer.domElement.removeEventListener('pointerleave', this.handlePointerLeave);
-    this.renderer.domElement.removeEventListener('click', this.handleClick);
+    window.removeEventListener('pointerup', this.handlePointerUp);
+    window.removeEventListener('pointercancel', this.handlePointerCancel);
     this.interactiveCards.forEach((card) => {
       card.frontTexture.dispose();
       card.backTexture.dispose();
@@ -242,42 +261,193 @@ class SceneController {
     const { clientWidth, clientHeight } = this.mount;
     const width = Math.max(clientWidth, 1);
     const height = Math.max(clientHeight, 1);
+    const isCompact = width < 760 || width / height < 0.72;
     this.renderer.setSize(width, height, false);
     this.camera.aspect = width / height;
+    this.camera.fov = isCompact ? 56 : 42;
+    this.camera.position.set(0, isCompact ? 8.15 : 6.7, isCompact ? 9.55 : 7.8);
+    this.camera.lookAt(0, isCompact ? 0.04 : 0, isCompact ? 0.18 : 0);
     this.camera.updateProjectionMatrix();
   };
 
-  private readonly handlePointerMove = (event: PointerEvent) => {
+  private syncPointerFromEvent(event: PointerEvent) {
     const rect = this.renderer.domElement.getBoundingClientRect();
-    this.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-    this.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    const width = Math.max(rect.width, 1);
+    const height = Math.max(rect.height, 1);
+    this.pointer.x = ((event.clientX - rect.left) / width) * 2 - 1;
+    this.pointer.y = -((event.clientY - rect.top) / height) * 2 + 1;
+  }
+
+  private updateDragTarget() {
+    this.raycaster.setFromCamera(this.pointer, this.camera);
+    const worldPoint = new THREE.Vector3();
+
+    if (!this.raycaster.ray.intersectPlane(this.dragPlane, worldPoint)) {
+      return;
+    }
+
+    this.dragTarget.set(
+      clamp(worldPoint.x, -3.25, 3.25),
+      1.12,
+      clamp(worldPoint.z, -2.65, 2.65),
+    );
+  }
+
+  private pickTarget(): HitTarget {
+    this.raycaster.setFromCamera(this.pointer, this.camera);
+    const meshes = this.interactiveCards
+      .filter((card) => card.drawn)
+      .map((card) => card.mesh);
+    const cardIntersections = this.raycaster.intersectObjects(meshes, false);
+    const cardHit = cardIntersections[0];
+    const cardIndex = cardHit
+      ? this.interactiveCards.findIndex((card) => card.mesh === cardHit.object)
+      : -1;
+
+    const deckIntersections = this.deckGroup.visible
+      ? this.raycaster.intersectObjects(this.deckGroup.children, false)
+      : [];
+    const deckHit = deckIntersections[0];
+
+    if (
+      deckHit &&
+      this.canDraw &&
+      (!cardHit || deckHit.distance < cardHit.distance)
+    ) {
+      return { type: 'deck', distance: deckHit.distance };
+    }
+
+    if (cardHit && cardIndex >= 0) {
+      return { type: 'card', index: cardIndex, distance: cardHit.distance };
+    }
+
+    return null;
+  }
+
+  private resetPointerInteraction() {
+    this.activePointerId = null;
+    this.pressedDeck = false;
+    this.draggingIndex = null;
+    this.hasDragged = false;
+    this.renderer.domElement.style.cursor = this.hoverIndex === null ? 'default' : 'pointer';
+  }
+
+  private readonly handlePointerMove = (event: PointerEvent) => {
+    if (this.activePointerId !== null && event.pointerId !== this.activePointerId) {
+      return;
+    }
+
+    this.syncPointerFromEvent(event);
+
+    if (this.draggingIndex !== null) {
+      this.hasDragged =
+        this.hasDragged ||
+        Math.hypot(event.clientX - this.startClientX, event.clientY - this.startClientY) > 5;
+      this.updateDragTarget();
+      event.preventDefault();
+    }
+  };
+
+  private readonly handlePointerDown = (event: PointerEvent) => {
+    this.syncPointerFromEvent(event);
+    const hit = this.pickTarget();
+
+    if (!hit) {
+      return;
+    }
+
+    this.activePointerId = event.pointerId;
+    this.startClientX = event.clientX;
+    this.startClientY = event.clientY;
+    this.hasDragged = false;
+    this.pressedDeck = hit.type === 'deck';
+    this.draggingIndex = hit.type === 'card' ? hit.index : null;
+
+    if (hit.type === 'card') {
+      const interactive = this.interactiveCards[hit.index];
+      this.hoverIndex = hit.index;
+      this.deckHovered = false;
+      this.dragPosition.copy(interactive.group.position);
+      this.dragTarget.copy(interactive.group.position);
+      this.updateDragTarget();
+      this.renderer.domElement.style.cursor = 'grabbing';
+    } else {
+      this.hoverIndex = null;
+      this.deckHovered = true;
+    }
+
+    try {
+      this.renderer.domElement.setPointerCapture(event.pointerId);
+    } catch {
+      // Some browsers do not allow capture after synthetic pointer events.
+    }
+
+    event.preventDefault();
   };
 
   private readonly handlePointerLeave = () => {
+    if (this.activePointerId !== null) {
+      return;
+    }
+
     this.pointer.set(99, 99);
     this.hoverIndex = null;
+    this.deckHovered = false;
     this.renderer.domElement.style.cursor = 'default';
   };
 
-  private readonly handleClick = () => {
-    if (this.deckHovered && this.canDraw) {
+  private readonly handlePointerUp = (event: PointerEvent) => {
+    if (this.activePointerId !== event.pointerId) {
+      return;
+    }
+
+    this.syncPointerFromEvent(event);
+    const pressedDeck = this.pressedDeck;
+    const draggedIndex = this.draggingIndex;
+    const wasDragged = this.hasDragged;
+
+    try {
+      this.renderer.domElement.releasePointerCapture(event.pointerId);
+    } catch {
+      // The pointer may have been released by the browser already.
+    }
+
+    this.resetPointerInteraction();
+
+    if (pressedDeck && this.canDraw) {
       this.onDraw();
       return;
     }
 
-    if (this.hoverIndex === null) {
+    if (draggedIndex === null) {
       return;
     }
 
-    const interactive = this.interactiveCards[this.hoverIndex];
+    const interactive = this.interactiveCards[draggedIndex];
     if (interactive && interactive.drawn && !interactive.revealed) {
       this.onReveal(interactive.slotIndex);
       return;
     }
 
-    if (interactive && interactive.drawn && interactive.revealed) {
+    if (interactive && interactive.drawn && interactive.revealed && !wasDragged) {
       this.onInspect(interactive.slotIndex);
     }
+
+    event.preventDefault();
+  };
+
+  private readonly handlePointerCancel = (event: PointerEvent) => {
+    if (this.activePointerId !== event.pointerId) {
+      return;
+    }
+
+    try {
+      this.renderer.domElement.releasePointerCapture(event.pointerId);
+    } catch {
+      // The browser may cancel capture before this handler runs.
+    }
+
+    this.resetPointerInteraction();
   };
 
   private animate = () => {
@@ -517,7 +687,19 @@ class SceneController {
       const deal = interactive.currentDraw;
       const hover = this.hoverIndex === index ? 1 : 0;
       const active = this.activeIndex === index ? 1 : 0;
+      const dragging = this.draggingIndex === index ? 1 : 0;
       interactive.currentFlip += (interactive.targetFlip - interactive.currentFlip) * 0.105;
+
+      if (dragging) {
+        this.dragPosition.lerp(this.dragTarget, 0.34);
+        interactive.group.position.copy(this.dragPosition);
+        interactive.group.rotation.x = interactive.currentFlip * Math.PI + this.pointer.y * 0.12;
+        interactive.group.rotation.y = this.pointer.x * 0.42;
+        interactive.group.rotation.z = interactive.baseRotation + this.pointer.x * 0.16;
+        const dragScale = 1.09 + active * 0.02;
+        interactive.mesh.scale.set(dragScale, dragScale, dragScale);
+        return;
+      }
 
       const arc = Math.sin(deal * Math.PI);
       const drift = Math.sin(elapsed * 1.6 + index * 1.7) * 0.035;
@@ -566,6 +748,20 @@ class SceneController {
   }
 
   private updateRaycast() {
+    if (this.draggingIndex !== null) {
+      this.hoverIndex = this.draggingIndex;
+      this.deckHovered = false;
+      this.renderer.domElement.style.cursor = 'grabbing';
+      return;
+    }
+
+    if (this.pressedDeck) {
+      this.hoverIndex = null;
+      this.deckHovered = true;
+      this.renderer.domElement.style.cursor = 'pointer';
+      return;
+    }
+
     this.raycaster.setFromCamera(this.pointer, this.camera);
     const meshes = this.interactiveCards
       .filter((card) => card.drawn)
