@@ -27,6 +27,8 @@ interface InteractiveCard {
   baseX: number;
   baseZ: number;
   baseRotation: number;
+  dealStartX: number;
+  dealStartZ: number;
   createdAt: number;
   drawnAt: number;
   burstAt: number;
@@ -116,6 +118,7 @@ class SceneController {
   private readonly deckPortal = new THREE.Group();
   private readonly cardsGroup = new THREE.Group();
   private readonly haloGroup = new THREE.Group();
+  private readonly deckHome = new THREE.Vector3(0, 0.16, 0);
   private readonly deckPortalMaterials: THREE.MeshBasicMaterial[] = [];
   private readonly interactiveCards: InteractiveCard[] = [];
   private readonly backTexture = createBackTexture('zh-TW');
@@ -130,6 +133,9 @@ class SceneController {
   private hoverIndex: number | null = null;
   private deckHovered = false;
   private canDraw = false;
+  private deckVisibleTarget = true;
+  private isCompactView = false;
+  private drawnCount = 0;
   private activePointerId: number | null = null;
   private pressedDeck = false;
   private draggingIndex: number | null = null;
@@ -222,6 +228,8 @@ class SceneController {
         interactive.targetDraw = 1;
         interactive.drawnAt = this.clock.getElapsedTime();
         interactive.currentDraw = 0.001;
+        interactive.dealStartX = this.deckGroup.position.x;
+        interactive.dealStartZ = this.deckGroup.position.z;
       }
 
       if (slot.revealed && !interactive.revealed) {
@@ -234,7 +242,8 @@ class SceneController {
 
     this.canDraw =
       reading.some((slot) => !slot.drawn) && !reading.some((slot) => slot.drawn && !slot.revealed);
-    this.deckGroup.visible = reading.length === 0 || this.canDraw;
+    this.drawnCount = reading.filter((slot) => slot.drawn).length;
+    this.deckVisibleTarget = reading.length === 0 || this.canDraw;
   }
 
   dispose() {
@@ -262,6 +271,7 @@ class SceneController {
     const width = Math.max(clientWidth, 1);
     const height = Math.max(clientHeight, 1);
     const isCompact = width < 760 || width / height < 0.72;
+    this.isCompactView = isCompact;
     this.renderer.setSize(width, height, false);
     this.camera.aspect = width / height;
     this.camera.fov = isCompact ? 56 : 42;
@@ -576,6 +586,8 @@ class SceneController {
         baseX: spreadSlot.x,
         baseZ: spreadSlot.z,
         baseRotation: spreadSlot.rotation,
+        dealStartX: this.deckHome.x,
+        dealStartZ: this.deckHome.z,
         createdAt: this.clock.getElapsedTime() + index * 0.12,
         drawnAt: slot.drawn ? this.clock.getElapsedTime() : Number.POSITIVE_INFINITY,
         burstAt: Number.NEGATIVE_INFINITY,
@@ -651,12 +663,28 @@ class SceneController {
   }
 
   private updateDeck(elapsed: number) {
+    const deckMovesAway = this.drawnCount > 0;
+    const targetX = deckMovesAway ? (this.isCompactView ? 2.28 : 2.72) : 0;
+    const targetZ = deckMovesAway ? (this.isCompactView ? 2.72 : 2.42) : 0;
+    const targetY = 0.16 + (deckMovesAway ? 0.04 : 0);
+    this.deckHome.set(targetX, targetY, targetZ);
+
+    const dealingCard = this.interactiveCards.some(
+      (card) => card.drawn && card.currentDraw < 0.76 && elapsed - card.drawnAt < 0.85,
+    );
+    this.deckGroup.visible = this.deckVisibleTarget || dealingCard;
+    this.deckPortal.visible = this.deckGroup.visible;
+
     const drawPulse = this.canDraw ? 1 : 0;
     const hoverPulse = this.deckHovered && this.canDraw ? 1 : 0;
+    this.deckGroup.position.x += (targetX - this.deckGroup.position.x) * 0.08;
+    this.deckGroup.position.z += (targetZ - this.deckGroup.position.z) * 0.08;
     this.deckGroup.rotation.y = Math.sin(elapsed * 0.7) * (0.16 + drawPulse * 0.08);
     this.deckGroup.rotation.z = -0.12 + Math.sin(elapsed * 1.4) * (0.035 + hoverPulse * 0.025);
-    this.deckGroup.position.y = 0.16 + Math.sin(elapsed * 1.1) * (0.04 + drawPulse * 0.025) + hoverPulse * 0.08;
-    const deckScale = 1 + hoverPulse * 0.055 + Math.sin(elapsed * 3.5) * drawPulse * 0.012;
+    this.deckGroup.position.y =
+      targetY + Math.sin(elapsed * 1.1) * (0.04 + drawPulse * 0.025) + hoverPulse * 0.08;
+    const deckScale =
+      (deckMovesAway ? 0.9 : 1) + hoverPulse * 0.055 + Math.sin(elapsed * 3.5) * drawPulse * 0.012;
     this.deckGroup.scale.setScalar(deckScale);
 
     this.deckGroup.children.forEach((child, index) => {
@@ -665,7 +693,8 @@ class SceneController {
       child.position.x = (index - 15) * 0.004 + Math.sin(elapsed * 1.8 + index) * (0.012 + topFan);
     });
 
-    this.deckPortal.visible = this.deckGroup.visible;
+    this.deckPortal.position.x += (this.deckGroup.position.x - this.deckPortal.position.x) * 0.12;
+    this.deckPortal.position.z += (this.deckGroup.position.z - this.deckPortal.position.z) * 0.12;
     this.deckPortal.children.forEach((child, index) => {
       child.rotation.z = elapsed * (0.8 + index * 0.22) * (index % 2 ? -1 : 1);
       child.scale.setScalar(1 + Math.sin(elapsed * 3 + index) * 0.08 + hoverPulse * 0.08);
@@ -704,11 +733,21 @@ class SceneController {
       const arc = Math.sin(deal * Math.PI);
       const drift = Math.sin(elapsed * 1.6 + index * 1.7) * 0.035;
       const packPop = clamp01((elapsed - interactive.drawnAt) / 0.28);
-      const x = interactive.baseX * deal + Math.sin(index * 2.1 + elapsed * 6) * (1 - deal) * 0.18;
-      const z = interactive.baseZ * deal + Math.cos(index * 1.7 + elapsed * 5) * (1 - deal) * 0.18;
+      const dealLean = Math.sin(deal * Math.PI);
+      const dealArc = Math.sin(deal * Math.PI);
+      const x =
+        interactive.dealStartX * (1 - deal) +
+        interactive.baseX * deal +
+        Math.sin(index * 1.9 + elapsed * 4.8) * (1 - deal) * 0.08;
+      const z =
+        interactive.dealStartZ * (1 - deal) +
+        interactive.baseZ * deal -
+        dealLean * 0.34 +
+        Math.cos(index * 1.5 + elapsed * 4.2) * (1 - deal) * 0.08;
       const y =
         0.13 +
-        arc * 2.05 +
+        arc * 1.35 +
+        dealArc * 0.7 +
         hover * 0.18 +
         active * 0.1 +
         drift * deal +
@@ -716,10 +755,10 @@ class SceneController {
 
       interactive.group.position.set(x, y, z);
       interactive.group.rotation.x = interactive.currentFlip * Math.PI;
-      interactive.group.rotation.y = (1 - deal) * (Math.PI * 3.3 + index * 0.34);
+      interactive.group.rotation.y = (1 - deal) * (Math.PI * 1.2 + index * 0.22);
       interactive.group.rotation.z =
         interactive.baseRotation * deal +
-        (1 - deal) * (index * 0.8 + Math.sin(elapsed * 7 + index) * 0.55) +
+        (1 - deal) * (-0.42 + index * 0.24 + Math.sin(elapsed * 5 + index) * 0.18) +
         Math.sin(elapsed * 2.4 + index) * 0.012 * deal;
 
       const burst = Math.max(0, 1 - (elapsed - interactive.burstAt) / 0.75);

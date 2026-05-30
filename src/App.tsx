@@ -170,6 +170,19 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [inspectedIndex]);
 
+  useEffect(() => {
+    if (!inspectedSlot?.revealed) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [inspectedSlot?.id, inspectedSlot?.revealed]);
+
   const castReading = () => {
     if (!hasQuestion) {
       setIntention(beginnerUi.defaultQuestion[language]);
@@ -688,21 +701,21 @@ function App() {
           onClick={() => setInspectedIndex(null)}
           role="presentation"
         >
+          <button
+            className="inspector-close"
+            onClick={() => setInspectedIndex(null)}
+            title={beginnerUi.closeInspector[language]}
+            type="button"
+          >
+            <X size={18} />
+          </button>
+
           <article
             aria-modal="true"
             className="card-inspector"
             onClick={(event) => event.stopPropagation()}
             role="dialog"
           >
-            <button
-              className="inspector-close"
-              onClick={() => setInspectedIndex(null)}
-              title={beginnerUi.closeInspector[language]}
-              type="button"
-            >
-              <X size={18} />
-            </button>
-
             <div className="inspector-card-wrap">
               <div className="inspector-card-art" style={getCardPaletteStyle(inspectedSlot)}>
                 <span>{inspectedSlot.card.glyph}</span>

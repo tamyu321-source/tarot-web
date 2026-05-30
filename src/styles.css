@@ -923,7 +923,7 @@ button:disabled {
 .card-inspector-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: 80;
   display: grid;
   place-items: center;
   background:
@@ -932,6 +932,7 @@ button:disabled {
     rgba(6, 5, 7, 0.76);
   padding: 24px;
   backdrop-filter: blur(18px);
+  animation: inspectorBackdropIn 240ms ease-out;
 }
 
 .card-inspector {
@@ -949,12 +950,14 @@ button:disabled {
     var(--surface-strong);
   box-shadow: 0 32px 90px rgba(0, 0, 0, 0.42);
   padding: 24px;
+  transform-origin: 50% 42%;
+  animation: inspectorPanelIn 420ms cubic-bezier(0.2, 0.82, 0.2, 1);
 }
 
 .inspector-close {
-  position: absolute;
-  top: 14px;
-  right: 14px;
+  position: fixed;
+  top: 24px;
+  right: 24px;
   z-index: 2;
   display: grid;
   width: 38px;
@@ -970,6 +973,7 @@ button:disabled {
 .inspector-card-wrap {
   display: grid;
   align-items: center;
+  perspective: 1200px;
 }
 
 .inspector-card-art {
@@ -994,6 +998,9 @@ button:disabled {
     inset 0 0 0 18px rgba(255, 247, 231, 0.12);
   color: #fff7e7;
   text-align: center;
+  transform-origin: 50% 72%;
+  animation: inspectorCardFlyIn 680ms cubic-bezier(0.16, 0.9, 0.2, 1.08);
+  will-change: transform, opacity;
 }
 
 .inspector-card-art::before {
@@ -1064,6 +1071,55 @@ button:disabled {
   line-height: 1;
 }
 
+@keyframes inspectorBackdropIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes inspectorPanelIn {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes inspectorCardFlyIn {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 46vh, -520px) rotateX(68deg) rotateZ(-16deg) scale(0.36);
+  }
+
+  58% {
+    opacity: 1;
+    transform: translate3d(0, -10px, 56px) rotateX(-5deg) rotateZ(2deg) scale(1.08);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) rotateX(0) rotateZ(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
+  }
+}
+
 @media (max-width: 1160px) {
   .app-shell {
     grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
@@ -1072,13 +1128,14 @@ button:disabled {
   .reading-panel {
     grid-column: 1 / -1;
     display: grid;
-    grid-template-columns: minmax(220px, 0.8fr) minmax(260px, 1.2fr);
+    grid-template-columns: minmax(260px, 0.82fr) minmax(360px, 1.18fr);
     grid-template-areas:
       "header slots"
       "context slots"
       "helper card"
-      "completion completion"
-      "records records";
+      "completion card"
+      "records card";
+    align-items: start;
     max-height: none;
     border-top: 1px solid var(--line);
     border-left: 0;
@@ -1102,6 +1159,7 @@ button:disabled {
 
   .card-reading {
     grid-area: card;
+    align-self: start;
   }
 
   .completion-panel {
@@ -1110,10 +1168,15 @@ button:disabled {
 
   .record-panel {
     grid-area: records;
+    align-self: start;
   }
 }
 
 @media (max-width: 760px) {
+  :root {
+    --mobile-stage-height: clamp(480px, 62svh, 620px);
+  }
+
   body {
     overflow: auto;
   }
@@ -1133,19 +1196,27 @@ button:disabled {
     padding: 18px;
   }
 
+  .control-panel {
+    margin-top: var(--mobile-stage-height);
+  }
+
   .table-stage {
+    position: fixed;
+    top: 0;
+    right: 0;
+    left: 0;
     z-index: 5;
-    min-height: clamp(520px, 72svh, 660px);
-    height: clamp(520px, 72svh, 660px);
+    min-height: var(--mobile-stage-height);
+    height: var(--mobile-stage-height);
     order: -1;
     border-bottom: 1px solid var(--line);
     background:
       radial-gradient(circle at 50% 22%, rgba(242, 198, 109, 0.14), transparent 34%),
-      rgba(12, 10, 12, 0.68);
+      linear-gradient(145deg, #151111 0%, #191516 52%, #131714 100%);
   }
 
   .table-status {
-    top: 14px;
+    top: max(14px, env(safe-area-inset-top));
   }
 
   .brand-lockup h1 {
@@ -1170,14 +1241,35 @@ button:disabled {
   }
 
   .card-inspector-backdrop {
-    padding: 14px;
+    place-items: start center;
+    height: 100dvh;
+    min-height: 100svh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding:
+      max(18px, calc(env(safe-area-inset-top) + 14px))
+      14px
+      max(84px, calc(env(safe-area-inset-bottom) + 76px));
   }
 
   .card-inspector {
-    max-height: calc(100vh - 28px);
+    width: 100%;
+    max-height: none;
     grid-template-columns: minmax(0, 1fr);
     gap: 18px;
     padding: 18px;
+    overflow: visible;
+  }
+
+  .inspector-close {
+    position: fixed;
+    top: auto;
+    right: max(14px, env(safe-area-inset-right));
+    bottom: max(14px, env(safe-area-inset-bottom));
+    width: 48px;
+    height: 48px;
+    background: rgba(22, 18, 21, 0.94);
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.42);
   }
 
   .inspector-card-wrap {
