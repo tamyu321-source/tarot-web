@@ -5,6 +5,7 @@ import type { Locale, ReadingSlot, SpreadDefinition, TarotCard } from '../types'
 interface TarotSceneProps {
   activeIndex: number | null;
   language: Locale;
+  onDraw: () => void;
   reading: ReadingSlot[];
   spread: SpreadDefinition;
   onReveal: (index: number) => void;
@@ -15,14 +16,19 @@ interface InteractiveCard {
   mesh: THREE.Mesh;
   slotIndex: number;
   card: TarotCard;
+  drawn: boolean;
   reversed: boolean;
   revealed: boolean;
+  targetDraw: number;
+  currentDraw: number;
   targetFlip: number;
   currentFlip: number;
   baseX: number;
   baseZ: number;
   baseRotation: number;
   createdAt: number;
+  drawnAt: number;
+  burstAt: number;
   frontTexture: THREE.CanvasTexture;
   backTexture: THREE.CanvasTexture;
 }
@@ -36,14 +42,17 @@ const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 export default function TarotScene({
   activeIndex,
   language,
+  onDraw,
   reading,
   spread,
   onReveal,
 }: TarotSceneProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const controllerRef = useRef<SceneController | null>(null);
+  const drawRef = useRef(onDraw);
   const revealRef = useRef(onReveal);
 
+  drawRef.current = onDraw;
   revealRef.current = onReveal;
 
   useEffect(() => {
@@ -51,9 +60,13 @@ export default function TarotScene({
       return;
     }
 
-    const controller = new SceneController(mountRef.current, (index) => {
-      revealRef.current(index);
-    });
+    const controller = new SceneController(
+      mountRef.current,
+      () => drawRef.current(),
+      (index) => {
+        revealRef.current(index);
+      },
+    );
 
     controllerRef.current = controller;
     controller.setState({ activeIndex, language, reading, spread });
@@ -84,8 +97,10 @@ class SceneController {
   private readonly raycaster = new THREE.Raycaster();
   private readonly pointer = new THREE.Vector2(99, 99);
   private readonly deckGroup = new THREE.Group();
+  private readonly deckPortal = new THREE.Group();
   private readonly cardsGroup = new THREE.Group();
   private readonly haloGroup = new THREE.Group();
+  private readonly deckPortalMaterials: THREE.MeshBasicMaterial[] = [];
   private readonly interactiveCards: InteractiveCard[] = [];
   private readonly backTexture = createBackTexture('zh-TW');
   private readonly particleMaterial = new THREE.PointsMaterial({
@@ -97,6 +112,8 @@ class SceneController {
   });
   private animationId = 0;
   private hoverIndex: number | null = null;
+  private deckHovered = false;
+  private canDraw = false;
   private disposed = false;
   private stateKey = '';
   private language: Locale = 'zh-TW';
@@ -104,6 +121,7 @@ class SceneController {
 
   constructor(
     private readonly mount: HTMLDivElement,
+    private readonly onDraw: () => void,
     private readonly onReveal: (index: number) => void,
   ) {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -129,7 +147,7 @@ class SceneController {
     this.createTable();
     this.createParticles();
     this.createDeck();
-    this.scene.add(this.deckGroup, this.cardsGroup, this.haloGroup);
+    this.scene.add(this.deckPortal, this.deckGroup, this.cardsGroup, this.haloGroup);
 
     window.addEventListener('resize', this.resize);
     this.renderer.domElement.addEventListener('pointermove', this.handlePointerMove);
@@ -174,11 +192,24 @@ class SceneController {
         return;
       }
 
+      if (slot.drawn && !interactive.drawn) {
+        interactive.drawn = true;
+        interactive.targetDraw = 1;
+        interactive.drawnAt = this.clock.getElapsedTime();
+        interactive.currentDraw = 0.001;
+      }
+
+      if (slot.revealed && !interactive.revealed) {
+        interactive.burstAt = this.clock.getElapsedTime();
+      }
+
       interactive.revealed = slot.revealed;
       interactive.targetFlip = slot.revealed ? 1 : 0;
     });
 
-    this.deckGroup.visible = reading.length === 0;
+    this.canDraw =
+      reading.some((slot) => !slot.drawn) && !reading.some((slot) => slot.drawn && !slot.revealed);
+    this.deckGroup.visible = reading.length === 0 || this.canDraw;
   }
 
   dispose() {
@@ -192,6 +223,7 @@ class SceneController {
       card.frontTexture.dispose();
       card.backTexture.dispose();
     });
+    this.deckPortalMaterials.forEach((material) => material.dispose());
     this.backTexture.dispose();
     this.particleMaterial.dispose();
     this.renderer.dispose();
@@ -220,12 +252,17 @@ class SceneController {
   };
 
   private readonly handleClick = () => {
+    if (this.deckHovered && this.canDraw) {
+      this.onDraw();
+      return;
+    }
+
     if (this.hoverIndex === null) {
       return;
     }
 
     const interactive = this.interactiveCards[this.hoverIndex];
-    if (interactive && !interactive.revealed) {
+    if (interactive && interactive.drawn && !interactive.revealed) {
       this.onReveal(interactive.slotIndex);
     }
   };
@@ -295,6 +332,21 @@ class SceneController {
   }
 
   private createDeck() {
+    for (let index = 0; index < 3; index += 1) {
+      const material = new THREE.MeshBasicMaterial({
+        color: index === 0 ? '#f2c66d' : index === 1 ? '#72d6bd' : '#e16f93',
+        transparent: true,
+        opacity: 0.14,
+        depthWrite: false,
+      });
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.84 + index * 0.18, 0.012, 10, 96), material);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = 0.08 + index * 0.01;
+      ring.userData.deckPortal = true;
+      this.deckPortal.add(ring);
+      this.deckPortalMaterials.push(material);
+    }
+
     for (let index = 0; index < 30; index += 1) {
       const mesh = this.createCardMesh({
         frontTexture: this.backTexture,
@@ -321,6 +373,7 @@ class SceneController {
       const group = new THREE.Group();
       group.add(mesh);
       group.position.set(0, 0.16, 0);
+      group.visible = slot.drawn;
       group.rotation.y = -0.4 + index * 0.08;
       group.rotation.z = spreadSlot.rotation;
       this.cardsGroup.add(group);
@@ -330,14 +383,19 @@ class SceneController {
         mesh,
         slotIndex: index,
         card: slot.card,
+        drawn: slot.drawn,
         reversed: slot.reversed,
         revealed: slot.revealed,
+        targetDraw: slot.drawn ? 1 : 0,
+        currentDraw: slot.drawn ? 1 : 0,
         targetFlip: slot.revealed ? 1 : 0,
         currentFlip: slot.revealed ? 1 : 0,
         baseX: spreadSlot.x,
         baseZ: spreadSlot.z,
         baseRotation: spreadSlot.rotation,
         createdAt: this.clock.getElapsedTime() + index * 0.12,
+        drawnAt: slot.drawn ? this.clock.getElapsedTime() : Number.POSITIVE_INFINITY,
+        burstAt: Number.NEGATIVE_INFINITY,
         frontTexture,
         backTexture,
       });
@@ -410,39 +468,67 @@ class SceneController {
   }
 
   private updateDeck(elapsed: number) {
-    this.deckGroup.rotation.y = Math.sin(elapsed * 0.7) * 0.16;
-    this.deckGroup.rotation.z = -0.12 + Math.sin(elapsed * 1.4) * 0.035;
-    this.deckGroup.position.y = 0.16 + Math.sin(elapsed * 1.1) * 0.04;
+    const drawPulse = this.canDraw ? 1 : 0;
+    const hoverPulse = this.deckHovered && this.canDraw ? 1 : 0;
+    this.deckGroup.rotation.y = Math.sin(elapsed * 0.7) * (0.16 + drawPulse * 0.08);
+    this.deckGroup.rotation.z = -0.12 + Math.sin(elapsed * 1.4) * (0.035 + hoverPulse * 0.025);
+    this.deckGroup.position.y = 0.16 + Math.sin(elapsed * 1.1) * (0.04 + drawPulse * 0.025) + hoverPulse * 0.08;
+    const deckScale = 1 + hoverPulse * 0.055 + Math.sin(elapsed * 3.5) * drawPulse * 0.012;
+    this.deckGroup.scale.setScalar(deckScale);
 
     this.deckGroup.children.forEach((child, index) => {
-      child.rotation.y = Math.sin(elapsed * 2.2 + index * 0.3) * 0.035;
-      child.position.x = (index - 15) * 0.004 + Math.sin(elapsed * 1.8 + index) * 0.012;
+      const topFan = this.canDraw ? Math.max(0, index - 22) * 0.004 : 0;
+      child.rotation.y = Math.sin(elapsed * 2.2 + index * 0.3) * (0.035 + drawPulse * 0.02);
+      child.position.x = (index - 15) * 0.004 + Math.sin(elapsed * 1.8 + index) * (0.012 + topFan);
+    });
+
+    this.deckPortal.visible = this.deckGroup.visible;
+    this.deckPortal.children.forEach((child, index) => {
+      child.rotation.z = elapsed * (0.8 + index * 0.22) * (index % 2 ? -1 : 1);
+      child.scale.setScalar(1 + Math.sin(elapsed * 3 + index) * 0.08 + hoverPulse * 0.08);
+      const material = (child as THREE.Mesh).material as THREE.MeshBasicMaterial;
+      material.opacity += ((this.canDraw ? 0.19 + hoverPulse * 0.12 : 0.05) - material.opacity) * 0.08;
     });
   }
 
   private updateCards(elapsed: number) {
     this.interactiveCards.forEach((interactive, index) => {
-      const delayProgress = clamp01((elapsed - interactive.createdAt) / 1.05);
-      const deal = easeOutCubic(delayProgress);
+      if (!interactive.drawn && interactive.currentDraw <= 0.001) {
+        interactive.group.visible = false;
+        return;
+      }
+
+      interactive.group.visible = true;
+      const drawProgress = easeOutCubic(clamp01((elapsed - interactive.drawnAt) / 0.95));
+      interactive.currentDraw = Math.max(interactive.currentDraw, drawProgress);
+      const deal = interactive.currentDraw;
       const hover = this.hoverIndex === index && !interactive.revealed ? 1 : 0;
       const active = this.activeIndex === index ? 1 : 0;
       interactive.currentFlip += (interactive.targetFlip - interactive.currentFlip) * 0.105;
 
       const arc = Math.sin(deal * Math.PI);
       const drift = Math.sin(elapsed * 1.6 + index * 1.7) * 0.035;
-      const x = interactive.baseX * deal + Math.cos(index * 1.4 + elapsed) * (1 - deal) * 0.45;
-      const z = interactive.baseZ * deal + Math.sin(index * 1.3 + elapsed) * (1 - deal) * 0.55;
-      const y = 0.13 + arc * 1.2 + hover * 0.18 + active * 0.1 + drift;
+      const packPop = clamp01((elapsed - interactive.drawnAt) / 0.28);
+      const x = interactive.baseX * deal + Math.sin(index * 2.1 + elapsed * 6) * (1 - deal) * 0.18;
+      const z = interactive.baseZ * deal + Math.cos(index * 1.7 + elapsed * 5) * (1 - deal) * 0.18;
+      const y =
+        0.13 +
+        arc * 2.05 +
+        hover * 0.18 +
+        active * 0.1 +
+        drift * deal +
+        Math.sin(packPop * Math.PI) * 0.75 * (1 - deal);
 
       interactive.group.position.set(x, y, z);
       interactive.group.rotation.x = interactive.currentFlip * Math.PI;
-      interactive.group.rotation.y = (1 - deal) * (Math.PI * 1.5 + index * 0.2);
+      interactive.group.rotation.y = (1 - deal) * (Math.PI * 3.3 + index * 0.34);
       interactive.group.rotation.z =
         interactive.baseRotation * deal +
-        (1 - deal) * (index * 0.8) +
+        (1 - deal) * (index * 0.8 + Math.sin(elapsed * 7 + index) * 0.55) +
         Math.sin(elapsed * 2.4 + index) * 0.012 * deal;
 
-      const meshScale = 1 + hover * 0.035 + active * 0.025;
+      const burst = Math.max(0, 1 - (elapsed - interactive.burstAt) / 0.75);
+      const meshScale = 1 + hover * 0.035 + active * 0.025 + burst * 0.08 + Math.sin(packPop * Math.PI) * 0.12;
       interactive.mesh.scale.set(meshScale, meshScale, meshScale);
     });
   }
@@ -456,30 +542,52 @@ class SceneController {
 
       child.position.set(interactive.baseX, 0.035, interactive.baseZ);
       child.rotation.z = elapsed * 0.18 + index;
-      child.scale.setScalar(1 + Math.sin(elapsed * 1.4 + index) * 0.035);
+      const drawGlow = interactive.drawn ? 1 : 0;
+      const burst = Math.max(0, 1 - (elapsed - interactive.burstAt) / 0.75);
+      child.scale.setScalar(1 + Math.sin(elapsed * 1.4 + index) * 0.035 + burst * 0.22);
 
       const material = (child as THREE.Mesh).material as THREE.MeshBasicMaterial;
       const isLit = interactive.revealed || this.hoverIndex === index || this.activeIndex === index;
-      material.opacity += ((isLit ? 0.24 : 0.04) - material.opacity) * 0.08;
+      material.opacity += ((drawGlow ? (isLit ? 0.28 : 0.08) + burst * 0.36 : 0) - material.opacity) * 0.08;
     });
   }
 
   private updateRaycast() {
     this.raycaster.setFromCamera(this.pointer, this.camera);
-    const meshes = this.interactiveCards.map((card) => card.mesh);
+    const meshes = this.interactiveCards
+      .filter((card) => card.drawn)
+      .map((card) => card.mesh);
     const intersections = this.raycaster.intersectObjects(meshes, false);
     const hit = intersections[0]?.object;
 
-    if (!hit) {
+    const deckIntersections = this.deckGroup.visible
+      ? this.raycaster.intersectObjects(this.deckGroup.children, false)
+      : [];
+
+    if (!hit && deckIntersections.length === 0) {
       this.hoverIndex = null;
+      this.deckHovered = false;
       this.renderer.domElement.style.cursor = 'default';
       return;
     }
 
+    if (
+      deckIntersections.length > 0 &&
+      this.canDraw &&
+      (!hit || deckIntersections[0].distance < intersections[0].distance)
+    ) {
+      this.hoverIndex = null;
+      this.deckHovered = true;
+      this.renderer.domElement.style.cursor = 'pointer';
+      return;
+    }
+
+    this.deckHovered = false;
     const nextIndex = this.interactiveCards.findIndex((card) => card.mesh === hit);
     this.hoverIndex = nextIndex >= 0 ? nextIndex : null;
     const interactive = this.hoverIndex === null ? null : this.interactiveCards[this.hoverIndex];
-    this.renderer.domElement.style.cursor = interactive && !interactive.revealed ? 'pointer' : 'default';
+    this.renderer.domElement.style.cursor =
+      interactive && interactive.drawn && !interactive.revealed ? 'pointer' : 'default';
   }
 }
 

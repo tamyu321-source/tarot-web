@@ -44,10 +44,12 @@ function App() {
     [modeId],
   );
   const revealedCount = reading.filter((slot) => slot.revealed).length;
+  const drawnCount = reading.filter((slot) => slot.drawn).length;
   const activeSlot = activeIndex === null ? null : reading[activeIndex] ?? null;
   const completed = reading.length > 0 && revealedCount === reading.length;
   const hasQuestion = intention.trim().length > 0;
-  const nextUnrevealedIndex = reading.findIndex((slot) => !slot.revealed);
+  const nextDrawIndex = reading.findIndex((slot) => !slot.drawn);
+  const nextUnrevealedIndex = reading.findIndex((slot) => slot.drawn && !slot.revealed);
   const readingQuestion = intention.trim() || beginnerUi.defaultQuestion[language];
   const activePositionText = activeSlot
     ? getBeginnerPositionText(activeSlot.slotId, language)
@@ -67,6 +69,29 @@ function App() {
     setActiveIndex(null);
   };
 
+  const drawCard = () => {
+    if (nextUnrevealedIndex >= 0) {
+      return;
+    }
+
+    const nextIndex = reading.findIndex((slot) => !slot.drawn);
+
+    if (nextIndex < 0) {
+      return;
+    }
+
+    setReading((current) => {
+      if (!current[nextIndex] || current[nextIndex].drawn) {
+        return current;
+      }
+
+      return current.map((slot, slotIndex) =>
+        slotIndex === nextIndex ? { ...slot, drawn: true } : slot,
+      );
+    });
+    setActiveIndex(nextIndex);
+  };
+
   const clearReading = () => {
     setReading([]);
     setActiveIndex(null);
@@ -75,7 +100,7 @@ function App() {
   const revealCard = (index: number) => {
     setReading((current) =>
       current.map((slot, slotIndex) =>
-        slotIndex === index ? { ...slot, revealed: true } : slot,
+        slotIndex === index && slot.drawn ? { ...slot, revealed: true } : slot,
       ),
     );
     setActiveIndex(index);
@@ -92,11 +117,11 @@ function App() {
     }
 
     if (stepId === 'cast') {
-      return reading.length > 0 ? 'done' : hasQuestion ? 'active' : '';
+      return drawnCount > 0 ? 'done' : hasQuestion ? 'active' : '';
     }
 
     if (stepId === 'read') {
-      return completed ? 'done' : reading.length > 0 ? 'active' : '';
+      return completed ? 'done' : drawnCount > 0 ? 'active' : '';
     }
 
     return '';
@@ -266,12 +291,17 @@ function App() {
               ? ui.deckReady[language]
               : completed
                 ? ui.complete[language]
-                : ui.activePrompt[language]}
+                : nextUnrevealedIndex >= 0
+                  ? ui.activePrompt[language]
+                  : nextDrawIndex >= 0
+                  ? beginnerUi.drawFromDeck[language]
+                  : ui.activePrompt[language]}
           </span>
         </div>
         <TarotScene
           activeIndex={activeIndex}
           language={language}
+          onDraw={drawCard}
           onReveal={revealCard}
           reading={reading}
           spread={spread}
@@ -283,7 +313,7 @@ function App() {
           <p>{ui.reading[language]}</p>
           <h2>{spread.labels[language]}</h2>
           <span>
-            {revealedCount}/{reading.length || spread.slots.length}
+            {drawnCount}/{reading.length || spread.slots.length}
           </span>
         </header>
 
@@ -292,12 +322,23 @@ function App() {
           <strong>{mode.labels[language]}</strong>
           <p>{reading.length || hasQuestion ? readingQuestion : beginnerUi.emptyBody[language]}</p>
         </div>
+        {beginnerMode && reading.length > 0 && nextDrawIndex >= 0 && nextUnrevealedIndex < 0 && (
+          <button className="draw-helper" onClick={drawCard} type="button">
+            <Sparkles size={16} />
+            <span>{beginnerUi.drawFromDeck[language]}</span>
+            <small>{beginnerUi.drawHint[language]}</small>
+          </button>
+        )}
 
         <div className="slot-list">
           {(reading.length ? reading : spread.slots).map((slot, index) => {
             const readingSlot = 'card' in slot ? slot : null;
             const isActive = activeIndex === index;
-            const isNext = readingSlot && !readingSlot.revealed && index === nextUnrevealedIndex;
+            const isNextDraw =
+              readingSlot && !readingSlot.drawn && index === nextDrawIndex && nextUnrevealedIndex < 0;
+            const isNextReveal =
+              readingSlot && readingSlot.drawn && !readingSlot.revealed && index === nextUnrevealedIndex;
+            const isNext = isNextDraw || isNextReveal;
             return (
               <button
                 className={[
@@ -307,13 +348,15 @@ function App() {
                 ]
                   .filter(Boolean)
                   .join(' ')}
-                disabled={!readingSlot}
+                disabled={!readingSlot || (!readingSlot.drawn && !isNextDraw)}
                 key={slot.id}
                 onClick={() => {
                   if (readingSlot?.revealed) {
                     setActiveIndex(index);
-                  } else if (readingSlot) {
+                  } else if (readingSlot?.drawn) {
                     revealCard(index);
+                  } else if (isNextDraw) {
+                    drawCard();
                   }
                 }}
                 type="button"
@@ -325,17 +368,23 @@ function App() {
                     <em>
                       {readingSlot.revealed
                         ? beginnerUi.revealedLabel[language]
-                        : isNext
-                          ? beginnerUi.revealNext[language]
-                          : beginnerUi.waitingLabel[language]}
+                        : isNextDraw
+                          ? beginnerUi.drawNext[language]
+                          : readingSlot.drawn
+                            ? isNextReveal
+                              ? beginnerUi.revealNext[language]
+                              : beginnerUi.drawnLabel[language]
+                            : beginnerUi.waitingLabel[language]}
                     </em>
                   )}
                 </div>
                 <small>
                   {readingSlot?.revealed
                     ? readingSlot.card.names[language]
-                    : readingSlot
+                    : readingSlot?.drawn
                       ? ui.hidden[language]
+                      : readingSlot
+                        ? beginnerUi.drawFromDeck[language]
                       : spread.slots[index].label[language]}
                 </small>
               </button>
@@ -376,6 +425,13 @@ function App() {
                 ))}
               </div>
               {beginnerMode && <small className="gentle-note">{beginnerUi.gentleNote[language]}</small>}
+            </>
+          ) : activeSlot?.drawn ? (
+            <>
+              <p>{activeSlot.label[language]}</p>
+              <h3>{ui.hidden[language]}</h3>
+              <span className="orientation">{beginnerUi.revealNext[language]}</span>
+              <p className="meaning">{beginnerUi.revealHint[language]}</p>
             </>
           ) : (
             <>

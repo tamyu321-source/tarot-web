@@ -43,9 +43,9 @@ export const ui = {
     ja: '照らしたいテーマを入力',
   },
   draw: {
-    'zh-TW': '展開牌陣',
-    en: 'Cast Spread',
-    ja: '展開する',
+    'zh-TW': '開始洗牌',
+    en: 'Start Shuffle',
+    ja: 'シャッフル開始',
   },
   recast: {
     'zh-TW': '重新洗牌',
@@ -171,9 +171,34 @@ export const beginnerUi = {
     ja: 'カードは固定された予言ではなく、考えを映す鏡として扱ってください。',
   },
   revealNext: {
-    'zh-TW': '下一張',
-    en: 'Next Card',
-    ja: '次のカード',
+    'zh-TW': '翻開',
+    en: 'Reveal',
+    ja: '開く',
+  },
+  drawNext: {
+    'zh-TW': '抽這張',
+    en: 'Draw This',
+    ja: 'このカードを引く',
+  },
+  drawFromDeck: {
+    'zh-TW': '點牌堆抽牌',
+    en: 'Click the deck',
+    ja: 'デッキをクリック',
+  },
+  drawHint: {
+    'zh-TW': '像開卡包一樣，自己從牌堆抽下一張。',
+    en: 'Draw the next card yourself, like opening a card pack.',
+    ja: 'カードパックを開くように、次の一枚を自分で引きます。',
+  },
+  revealHint: {
+    'zh-TW': '牌已經到位置上了，點它翻開。',
+    en: 'The card has landed. Click it to reveal.',
+    ja: 'カードが位置に着きました。クリックして開きます。',
+  },
+  drawnLabel: {
+    'zh-TW': '已抽',
+    en: 'Drawn',
+    ja: '引いた',
   },
   revealedLabel: {
     'zh-TW': '已讀',

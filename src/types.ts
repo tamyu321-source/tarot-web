@@ -35,6 +35,7 @@ export interface ReadingSlot {
   slotId: string;
   label: Localized<string>;
   card: TarotCard;
+  drawn: boolean;
   reversed: boolean;
   revealed: boolean;
 }

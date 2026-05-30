@@ -30,6 +30,7 @@ export function createReading(spread: SpreadDefinition): ReadingSlot[] {
     slotId: spread.slots[index].id,
     label: spread.slots[index].label,
     card,
+    drawn: false,
     reversed: randomIndex(100) < 32,
     revealed: false,
   }));
