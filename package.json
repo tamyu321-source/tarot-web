@@ -1,0 +1,35 @@
+{
+  "name": "tarot-web",
+  "version": "0.1.0",
+  "private": false,
+  "description": "An open-source multilingual 3D tarot reading web app.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc && vite build",
+    "preview": "vite preview --host 127.0.0.1"
+  },
+  "keywords": [
+    "tarot",
+    "threejs",
+    "react",
+    "i18n",
+    "open-source"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "lucide-react": "0.468.0",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "three": "0.160.1"
+  },
+  "devDependencies": {
+    "@types/react": "18.2.73",
+    "@types/react-dom": "18.2.23",
+    "@types/three": "0.160.0",
+    "@vitejs/plugin-react": "4.2.1",
+    "node-releases": "2.0.36",
+    "typescript": "5.4.5",
+    "vite": "4.5.5"
+  }
+}
