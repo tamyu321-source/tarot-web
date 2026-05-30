@@ -119,6 +119,271 @@ export const ui = {
   },
 } as const;
 
+export const beginnerUi = {
+  guide: {
+    'zh-TW': '新手引導',
+    en: 'Beginner Guide',
+    ja: '初心者ガイド',
+  },
+  guideOn: {
+    'zh-TW': '開',
+    en: 'On',
+    ja: 'オン',
+  },
+  guideOff: {
+    'zh-TW': '關',
+    en: 'Off',
+    ja: 'オフ',
+  },
+  startHere: {
+    'zh-TW': '從這裡開始',
+    en: 'Start Here',
+    ja: 'ここから',
+  },
+  templates: {
+    'zh-TW': '提問模板',
+    en: 'Question Starters',
+    ja: '問いの例',
+  },
+  recommended: {
+    'zh-TW': '新手推薦',
+    en: 'Beginner Pick',
+    ja: '初心者向け',
+  },
+  defaultQuestion: {
+    'zh-TW': '我現在最需要看清的是什麼？',
+    en: 'What do I most need to understand right now?',
+    ja: '今いちばん理解すべきことは何ですか？',
+  },
+  plainMeaning: {
+    'zh-TW': '一句話',
+    en: 'In Plain Words',
+    ja: 'ひとことで',
+  },
+  nextMove: {
+    'zh-TW': '下一步',
+    en: 'Next Move',
+    ja: '次の一手',
+  },
+  gentleNote: {
+    'zh-TW': '把牌當成整理思路的鏡子，不用把它當成絕對預言。',
+    en: 'Treat the cards as a mirror for reflection, not as a fixed prediction.',
+    ja: 'カードは固定された予言ではなく、考えを映す鏡として扱ってください。',
+  },
+  revealNext: {
+    'zh-TW': '下一張',
+    en: 'Next Card',
+    ja: '次のカード',
+  },
+  revealedLabel: {
+    'zh-TW': '已讀',
+    en: 'Read',
+    ja: '読了',
+  },
+  waitingLabel: {
+    'zh-TW': '待翻',
+    en: 'Waiting',
+    ja: '待機',
+  },
+  emptyTitle: {
+    'zh-TW': '先選一個問題，剩下交給牌桌',
+    en: 'Choose a question, then let the table open',
+    ja: '問いをひとつ選び、テーブルを開きます',
+  },
+  emptyBody: {
+    'zh-TW': '不確定怎麼問時，直接點一個模板；三張牌會用「來處、所在、去向」幫你整理。',
+    en: 'If words are hard, pick a starter. Three cards will sort the theme into origin, presence, and direction.',
+    ja: '言葉に迷う時は例を選んでください。三枚のカードが起点、現在、行き先に整理します。',
+  },
+  completeTitle: {
+    'zh-TW': '三個位置都讀完了',
+    en: 'The spread is complete',
+    ja: 'スプレッドが完成しました',
+  },
+  completeBody: {
+    'zh-TW': '最後看重複出現的關鍵詞，通常那就是這次閱讀最值得帶走的線索。',
+    en: 'Now notice repeated keywords; they are usually the clearest thread to carry away.',
+    ja: '最後に重なるキーワードを見てください。それが持ち帰るべき糸口です。',
+  },
+  applyTemplate: {
+    'zh-TW': '套用',
+    en: 'Use',
+    ja: '使う',
+  },
+} as const;
+
+export const beginnerSteps = [
+  {
+    id: 'question',
+    labels: {
+      'zh-TW': '問題',
+      en: 'Question',
+      ja: '問い',
+    },
+  },
+  {
+    id: 'cast',
+    labels: {
+      'zh-TW': '抽牌',
+      en: 'Cast',
+      ja: '展開',
+    },
+  },
+  {
+    id: 'read',
+    labels: {
+      'zh-TW': '閱讀',
+      en: 'Read',
+      ja: '読む',
+    },
+  },
+];
+
+export const questionTemplates = [
+  {
+    id: 'clarity',
+    modeId: 'growth',
+    text: {
+      'zh-TW': '我現在最需要看清的是什麼？',
+      en: 'What do I most need to understand right now?',
+      ja: '今いちばん理解すべきことは何ですか？',
+    },
+  },
+  {
+    id: 'relationship',
+    modeId: 'relationships',
+    text: {
+      'zh-TW': '這段關係下一步適合怎麼靠近？',
+      en: 'What is the healthiest next step in this relationship?',
+      ja: 'この関係で次に大切な一歩は何ですか？',
+    },
+  },
+  {
+    id: 'work',
+    modeId: 'craft',
+    text: {
+      'zh-TW': '工作或創作現在該聚焦在哪裡？',
+      en: 'Where should my work or creative energy focus now?',
+      ja: '仕事や創作で今どこに集中すべきですか？',
+    },
+  },
+  {
+    id: 'choice',
+    modeId: 'decision',
+    text: {
+      'zh-TW': '做這個決定前，我需要注意什麼？',
+      en: 'What should I notice before making this decision?',
+      ja: 'この選択の前に何へ注意すべきですか？',
+    },
+  },
+];
+
+export const beginnerActions = {
+  upright: {
+    'zh-TW': '今天先做一個小而明確的動作，讓這張牌的提醒落到現實。',
+    en: 'Take one small, specific action today so this card becomes practical.',
+    ja: '今日、小さく具体的な行動をひとつ選び、このカードを現実に移してください。',
+  },
+  reversed: {
+    'zh-TW': '先放慢，不急著定論；把卡住的地方寫成一句可以面對的話。',
+    en: 'Slow down before deciding; write the stuck point as one sentence you can face.',
+    ja: '急いで決めず、詰まっている点を向き合える一文にしてください。',
+  },
+};
+
+export const beginnerPositionCopy = {
+  origin: {
+    'zh-TW': '這張牌在看事情的起點，也可能是你帶進問題裡的舊模式。',
+    en: 'This card looks at the starting point, including old patterns you may be bringing in.',
+    ja: 'このカードは出発点と、問いに持ち込んでいる古いパターンを見ます。',
+  },
+  presence: {
+    'zh-TW': '這張牌在看當下最活躍的能量，先不用判斷好壞。',
+    en: 'This card shows the most active energy right now; do not rush to label it good or bad.',
+    ja: 'このカードは今いちばん動いている力を示します。良し悪しを急がないでください。',
+  },
+  direction: {
+    'zh-TW': '這張牌在看下一個方向，不是命令，而是一個可以試走的路標。',
+    en: 'This card points to a direction, not an order; treat it as a path marker to test.',
+    ja: 'このカードは命令ではなく、試せる道しるべとして次の方向を示します。',
+  },
+  fire: {
+    'zh-TW': '這裡看行動力和想開始的衝動。',
+    en: 'This position looks at action, drive, and the urge to begin.',
+    ja: 'ここでは行動力と始めたい衝動を見ます。',
+  },
+  water: {
+    'zh-TW': '這裡看情緒、關係和真正被觸動的地方。',
+    en: 'This position looks at emotion, connection, and what is being touched.',
+    ja: 'ここでは感情、関係性、心が動く場所を見ます。',
+  },
+  air: {
+    'zh-TW': '這裡看想法、語言和需要被說清楚的事。',
+    en: 'This position looks at thoughts, words, and what needs clarity.',
+    ja: 'ここでは思考、言葉、明確にするべきことを見ます。',
+  },
+  earth: {
+    'zh-TW': '這裡看資源、身體和能落地的安排。',
+    en: 'This position looks at resources, the body, and grounded plans.',
+    ja: 'ここでは資源、身体、現実的な計画を見ます。',
+  },
+  core: {
+    'zh-TW': '這裡看整件事最核心的訊號。',
+    en: 'This position shows the central signal of the whole reading.',
+    ja: 'ここでは全体の中心となるサインを見ます。',
+  },
+  resistance: {
+    'zh-TW': '這裡看阻力，也看你不想承認但正在消耗的部分。',
+    en: 'This position shows resistance, including what quietly drains energy.',
+    ja: 'ここでは抵抗と、静かに力を奪うものを見ます。',
+  },
+  resource: {
+    'zh-TW': '這裡看已經能使用的支持。',
+    en: 'This position shows support that is already available.',
+    ja: 'ここではすでに使える支えを見ます。',
+  },
+  message: {
+    'zh-TW': '這裡看最想被聽見的一句提醒。',
+    en: 'This position shows the reminder that wants to be heard.',
+    ja: 'ここでは聞かれたがっているメッセージを見ます。',
+  },
+  step: {
+    'zh-TW': '這裡看下一個可執行的小步驟。',
+    en: 'This position shows the next doable step.',
+    ja: 'ここでは次に実行できる小さな一歩を見ます。',
+  },
+  self: {
+    'zh-TW': '這裡看你在這件事裡的狀態。',
+    en: 'This position shows your state inside this theme.',
+    ja: 'ここではこのテーマの中でのあなたの状態を見ます。',
+  },
+  other: {
+    'zh-TW': '這裡看外部的人、環境或回應。',
+    en: 'This position shows the other person, environment, or response.',
+    ja: 'ここでは相手、環境、外側の反応を見ます。',
+  },
+  threshold: {
+    'zh-TW': '這裡看跨過去之前的門檻。',
+    en: 'This position shows the threshold before moving through.',
+    ja: 'ここでは進む前の境界を見ます。',
+  },
+  key: {
+    'zh-TW': '這裡看能打開局面的關鍵。',
+    en: 'This position shows the key that can open the situation.',
+    ja: 'ここでは状況を開く鍵を見ます。',
+  },
+  invitation: {
+    'zh-TW': '這裡看值得接受的邀請。',
+    en: 'This position shows the invitation worth receiving.',
+    ja: 'ここでは受け取る価値のある招待を見ます。',
+  },
+  integration: {
+    'zh-TW': '這裡看如何把經驗整合回生活。',
+    en: 'This position shows how to integrate the reading into life.',
+    ja: 'ここでは読み解きを生活へ統合する方法を見ます。',
+  },
+} as const;
+
 export const readingModes: ReadingMode[] = [
   {
     id: 'growth',

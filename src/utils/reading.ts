@@ -27,6 +27,7 @@ function drawUniqueCards(count: number): TarotCard[] {
 export function createReading(spread: SpreadDefinition): ReadingSlot[] {
   return drawUniqueCards(spread.slots.length).map((card, index) => ({
     id: `${spread.id}-${spread.slots[index].id}-${card.id}`,
+    slotId: spread.slots[index].id,
     label: spread.slots[index].label,
     card,
     reversed: randomIndex(100) < 32,

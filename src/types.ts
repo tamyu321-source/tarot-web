@@ -32,6 +32,7 @@ export interface SpreadDefinition {
 
 export interface ReadingSlot {
   id: string;
+  slotId: string;
   label: Localized<string>;
   card: TarotCard;
   reversed: boolean;
