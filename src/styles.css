@@ -491,6 +491,82 @@ button:disabled {
   overflow-wrap: anywhere;
 }
 
+.completion-panel {
+  display: grid;
+  gap: 12px;
+  border: 1px solid rgba(114, 214, 189, 0.28);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(114, 214, 189, 0.12), rgba(242, 198, 109, 0.08)),
+    rgba(255, 248, 222, 0.05);
+  padding: 13px;
+}
+
+.completion-panel-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.completion-panel-header svg {
+  color: #bdeedd;
+  margin-top: 2px;
+}
+
+.completion-panel-header div {
+  display: grid;
+  gap: 4px;
+}
+
+.completion-panel-header strong {
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.completion-panel-header span,
+.completion-panel small {
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.completion-summary {
+  display: grid;
+  gap: 8px;
+}
+
+.completion-card {
+  display: grid;
+  grid-template-columns: minmax(48px, 0.32fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid rgba(255, 235, 195, 0.14);
+  border-radius: 8px;
+  background: rgba(10, 9, 10, 0.22);
+  color: var(--text);
+  padding: 8px 9px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.completion-card.active {
+  border-color: rgba(242, 198, 109, 0.56);
+  background: rgba(242, 198, 109, 0.12);
+}
+
+.completion-card span,
+.completion-card em {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.completion-card strong {
+  overflow-wrap: anywhere;
+  font-size: 0.88rem;
+}
+
 .draw-helper {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -643,21 +719,6 @@ button:disabled {
   line-height: 1.45;
 }
 
-.completion-note {
-  display: grid;
-  gap: 5px;
-  border-top: 1px solid var(--line);
-  padding-top: 14px;
-}
-
-.completion-note strong {
-  color: var(--gold);
-}
-
-.completion-note span {
-  color: var(--muted);
-}
-
 .keyword-cloud {
   display: flex;
   flex-wrap: wrap;
@@ -703,7 +764,7 @@ button:disabled {
     grid-row: 3;
   }
 
-  .completion-note {
+  .completion-panel {
     grid-column: 1 / -1;
   }
 }

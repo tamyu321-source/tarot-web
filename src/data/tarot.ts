@@ -221,7 +221,7 @@ export const beginnerUi = {
     ja: '言葉に迷う時は例を選んでください。三枚のカードが起点、現在、行き先に整理します。',
   },
   completeTitle: {
-    'zh-TW': '三個位置都讀完了',
+    'zh-TW': '閱讀完成',
     en: 'The spread is complete',
     ja: 'スプレッドが完成しました',
   },
@@ -229,6 +229,11 @@ export const beginnerUi = {
     'zh-TW': '最後看重複出現的關鍵詞，通常那就是這次閱讀最值得帶走的線索。',
     en: 'Now notice repeated keywords; they are usually the clearest thread to carry away.',
     ja: '最後に重なるキーワードを見てください。それが持ち帰るべき糸口です。',
+  },
+  completeReviewHint: {
+    'zh-TW': '點任一牌位可以回看單張解讀。',
+    en: 'Select any position to revisit its card reading.',
+    ja: '任意の位置を選ぶと、そのカードの読みを見返せます。',
   },
   applyTemplate: {
     'zh-TW': '套用',

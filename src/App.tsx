@@ -45,6 +45,7 @@ function App() {
   );
   const revealedCount = reading.filter((slot) => slot.revealed).length;
   const drawnCount = reading.filter((slot) => slot.drawn).length;
+  const completedCards = reading.filter((slot) => slot.revealed);
   const activeSlot = activeIndex === null ? null : reading[activeIndex] ?? null;
   const completed = reading.length > 0 && revealedCount === reading.length;
   const hasQuestion = intention.trim().length > 0;
@@ -322,6 +323,32 @@ function App() {
           <strong>{mode.labels[language]}</strong>
           <p>{reading.length || hasQuestion ? readingQuestion : beginnerUi.emptyBody[language]}</p>
         </div>
+        {beginnerMode && completed && (
+          <section className="completion-panel">
+            <div className="completion-panel-header">
+              <CheckCircle2 size={19} />
+              <div>
+                <strong>{beginnerUi.completeTitle[language]}</strong>
+                <span>{beginnerUi.completeBody[language]}</span>
+              </div>
+            </div>
+            <div className="completion-summary">
+              {completedCards.map((slot) => (
+                <button
+                  className={slot.id === activeSlot?.id ? 'completion-card active' : 'completion-card'}
+                  key={slot.id}
+                  onClick={() => setActiveIndex(reading.findIndex((item) => item.id === slot.id))}
+                  type="button"
+                >
+                  <span>{slot.label[language]}</span>
+                  <strong>{slot.card.names[language]}</strong>
+                  <em>{slot.reversed ? ui.reversed[language] : ui.upright[language]}</em>
+                </button>
+              ))}
+            </div>
+            <small>{beginnerUi.completeReviewHint[language]}</small>
+          </section>
+        )}
         {beginnerMode && reading.length > 0 && nextDrawIndex >= 0 && nextUnrevealedIndex < 0 && (
           <button className="draw-helper" onClick={drawCard} type="button">
             <Sparkles size={16} />
@@ -442,12 +469,6 @@ function App() {
             </>
           )}
         </article>
-        {beginnerMode && completed && (
-          <div className="completion-note">
-            <strong>{beginnerUi.completeTitle[language]}</strong>
-            <span>{beginnerUi.completeBody[language]}</span>
-          </div>
-        )}
       </aside>
     </main>
   );
