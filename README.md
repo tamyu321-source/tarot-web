@@ -2,6 +2,8 @@
 
 Arcana Kin is an open-source multilingual 3D tarot reading web app built with React, TypeScript, Vite, and Three.js.
 
+Live site: https://tamyu321-source.github.io/tarot-web/
+
 ## Features
 
 - Traditional Chinese, English, and Japanese UI copy
@@ -21,6 +23,12 @@ npm run dev
 
 ```bash
 npm run build
+```
+
+GitHub Pages uses:
+
+```bash
+npm run build:pages
 ```
 
 ## License
