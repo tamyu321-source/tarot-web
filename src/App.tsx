@@ -1,8 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   BookOpen,
   CheckCircle2,
   Circle,
+  Eye,
+  History,
   Languages,
   Library,
   Lightbulb,
@@ -10,6 +12,7 @@ import {
   Shuffle,
   Sparkles,
   WandSparkles,
+  X,
 } from 'lucide-react';
 import TarotScene from './components/TarotScene';
 import {
@@ -21,10 +24,27 @@ import {
   questionTemplates,
   readingModes,
   spreads,
+  tarotDeck,
   ui,
 } from './data/tarot';
 import { createReading } from './utils/reading';
 import type { Locale, ReadingSlot } from './types';
+
+const recordsStorageKey = 'arcana-kin-reading-records';
+const maxStoredRecords = 12;
+
+interface ReadingRecord {
+  id: string;
+  createdAt: string;
+  question: string;
+  spreadId: string;
+  modeId: string;
+  cards: Array<{
+    slotId: string;
+    cardId: string;
+    reversed: boolean;
+  }>;
+}
 
 function App() {
   const [language, setLanguage] = useState<Locale>('zh-TW');
@@ -34,6 +54,11 @@ function App() {
   const [reading, setReading] = useState<ReadingSlot[]>([]);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [beginnerMode, setBeginnerMode] = useState(true);
+  const [inspectedIndex, setInspectedIndex] = useState<number | null>(null);
+  const [records, setRecords] = useState<ReadingRecord[]>([]);
+  const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
+  const [readingSessionId, setReadingSessionId] = useState(createReadingId);
+  const [savedReadingId, setSavedReadingId] = useState<string | null>(null);
 
   const spread = useMemo(
     () => spreads.find((item) => item.id === spreadId) ?? spreads[0],
@@ -47,6 +72,7 @@ function App() {
   const drawnCount = reading.filter((slot) => slot.drawn).length;
   const completedCards = reading.filter((slot) => slot.revealed);
   const activeSlot = activeIndex === null ? null : reading[activeIndex] ?? null;
+  const inspectedSlot = inspectedIndex === null ? null : reading[inspectedIndex] ?? null;
   const completed = reading.length > 0 && revealedCount === reading.length;
   const hasQuestion = intention.trim().length > 0;
   const nextDrawIndex = reading.findIndex((slot) => !slot.drawn);
@@ -61,6 +87,88 @@ function App() {
   const activeNextMove = activeSlot
     ? beginnerActions[activeSlot.reversed ? 'reversed' : 'upright'][language]
     : '';
+  const selectedRecord =
+    (selectedRecordId ? records.find((record) => record.id === selectedRecordId) : null) ??
+    records[0] ??
+    null;
+  const selectedRecordCards = selectedRecord ? getRecordCards(selectedRecord) : [];
+  const recordCountText = beginnerUi.recordCount[language].replace('{count}', String(records.length));
+  const isCurrentReadingSaved = completed && savedReadingId === readingSessionId;
+
+  useEffect(() => {
+    try {
+      const rawRecords = window.localStorage.getItem(recordsStorageKey);
+      if (!rawRecords) {
+        return;
+      }
+
+      const parsedRecords: unknown = JSON.parse(rawRecords);
+      if (!Array.isArray(parsedRecords)) {
+        return;
+      }
+
+      const normalizedRecords = parsedRecords
+        .filter(isReadingRecord)
+        .slice(0, maxStoredRecords);
+      setRecords(normalizedRecords);
+      setSelectedRecordId(normalizedRecords[0]?.id ?? null);
+    } catch {
+      setRecords([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!completed || reading.length === 0 || savedReadingId === readingSessionId) {
+      return;
+    }
+
+    const record: ReadingRecord = {
+      id: readingSessionId,
+      createdAt: new Date().toISOString(),
+      question: readingQuestion,
+      spreadId: spread.id,
+      modeId: mode.id,
+      cards: reading.map((slot) => ({
+        slotId: slot.slotId,
+        cardId: slot.card.id,
+        reversed: slot.reversed,
+      })),
+    };
+
+    setRecords((currentRecords) => {
+      const nextRecords = [
+        record,
+        ...currentRecords.filter((currentRecord) => currentRecord.id !== record.id),
+      ].slice(0, maxStoredRecords);
+      persistRecords(nextRecords);
+      return nextRecords;
+    });
+    setSelectedRecordId(record.id);
+    setSavedReadingId(record.id);
+  }, [
+    completed,
+    mode.id,
+    reading,
+    readingQuestion,
+    readingSessionId,
+    savedReadingId,
+    spread.id,
+  ]);
+
+  useEffect(() => {
+    if (inspectedIndex === null) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setInspectedIndex(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [inspectedIndex]);
 
   const castReading = () => {
     if (!hasQuestion) {
@@ -68,6 +176,9 @@ function App() {
     }
     setReading(createReading(spread));
     setActiveIndex(null);
+    setInspectedIndex(null);
+    setReadingSessionId(createReadingId());
+    setSavedReadingId(null);
   };
 
   const drawCard = () => {
@@ -96,6 +207,8 @@ function App() {
   const clearReading = () => {
     setReading([]);
     setActiveIndex(null);
+    setInspectedIndex(null);
+    setSavedReadingId(null);
   };
 
   const revealCard = (index: number) => {
@@ -105,6 +218,23 @@ function App() {
       ),
     );
     setActiveIndex(index);
+  };
+
+  const inspectCard = (index: number) => {
+    const slot = reading[index];
+    if (!slot) {
+      return;
+    }
+
+    if (slot.drawn && !slot.revealed) {
+      revealCard(index);
+      return;
+    }
+
+    if (slot.revealed) {
+      setActiveIndex(index);
+      setInspectedIndex(index);
+    }
   };
 
   const applyTemplate = (template: (typeof questionTemplates)[number]) => {
@@ -201,6 +331,8 @@ function App() {
                   setSpreadId(item.id);
                   setReading([]);
                   setActiveIndex(null);
+                  setInspectedIndex(null);
+                  setSavedReadingId(null);
                 }}
                 type="button"
               >
@@ -303,6 +435,7 @@ function App() {
           activeIndex={activeIndex}
           language={language}
           onDraw={drawCard}
+          onInspect={inspectCard}
           onReveal={revealCard}
           reading={reading}
           spread={spread}
@@ -337,7 +470,7 @@ function App() {
                 <button
                   className={slot.id === activeSlot?.id ? 'completion-card active' : 'completion-card'}
                   key={slot.id}
-                  onClick={() => setActiveIndex(reading.findIndex((item) => item.id === slot.id))}
+                  onClick={() => inspectCard(reading.findIndex((item) => item.id === slot.id))}
                   type="button"
                 >
                   <span>{slot.label[language]}</span>
@@ -379,7 +512,7 @@ function App() {
                 key={slot.id}
                 onClick={() => {
                   if (readingSlot?.revealed) {
-                    setActiveIndex(index);
+                    inspectCard(index);
                   } else if (readingSlot?.drawn) {
                     revealCard(index);
                   } else if (isNextDraw) {
@@ -427,6 +560,12 @@ function App() {
               <span className={activeSlot.reversed ? 'orientation reversed' : 'orientation'}>
                 {activeSlot.reversed ? ui.reversed[language] : ui.upright[language]}
               </span>
+              {activeIndex !== null && (
+                <button className="inspect-action" onClick={() => inspectCard(activeIndex)} type="button">
+                  <Eye size={16} />
+                  <span>{beginnerUi.inspectCard[language]}</span>
+                </button>
+              )}
               <p className="meaning">
                 {activeSlot.reversed
                   ? activeSlot.card.shadow[language]
@@ -469,7 +608,148 @@ function App() {
             </>
           )}
         </article>
+
+        <section className="record-panel">
+          <div className="record-panel-header">
+            <History size={18} />
+            <div>
+              <strong>{beginnerUi.journalTitle[language]}</strong>
+              <span>
+                {records.length > 0
+                  ? beginnerUi.journalBody[language]
+                  : beginnerUi.journalEmpty[language]}
+              </span>
+            </div>
+            <em>{isCurrentReadingSaved ? beginnerUi.journalSaved[language] : recordCountText}</em>
+          </div>
+
+          {records.length > 0 ? (
+            <>
+              <div className="record-list">
+                {records.slice(0, 4).map((record, index) => {
+                  const recordSpread = getRecordSpread(record);
+                  const recordMode = getRecordMode(record);
+                  const previewCards = getRecordCards(record)
+                    .slice(0, 3)
+                    .map(({ card }) => card.names[language])
+                    .join(' · ');
+
+                  return (
+                    <button
+                      className={
+                        record.id === selectedRecord?.id ? 'record-item active' : 'record-item'
+                      }
+                      key={record.id}
+                      onClick={() => setSelectedRecordId(record.id)}
+                      type="button"
+                    >
+                      <span>
+                        <strong>{record.question}</strong>
+                        {index === 0 && <em>{beginnerUi.latestRecord[language]}</em>}
+                      </span>
+                      <small>
+                        {formatRecordDate(record.createdAt, language)} ·{' '}
+                        {recordSpread.labels[language]} · {recordMode.labels[language]}
+                      </small>
+                      <small>{previewCards}</small>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {selectedRecord && (
+                <div className="record-detail">
+                  <div className="record-detail-header">
+                    <span>{beginnerUi.recordDetail[language]}</span>
+                    <strong>{formatRecordDate(selectedRecord.createdAt, language)}</strong>
+                  </div>
+                  <p>{selectedRecord.question}</p>
+                  <div className="record-card-stack">
+                    {selectedRecordCards.map(({ card, reversed, slot }) => (
+                      <div className="record-card-row" key={`${selectedRecord.id}-${slot.id}-${card.id}`}>
+                        <span>{slot.label[language]}</span>
+                        <strong>{card.names[language]}</strong>
+                        <em>{reversed ? ui.reversed[language] : ui.upright[language]}</em>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="record-empty">{beginnerUi.journalEmpty[language]}</p>
+          )}
+        </section>
       </aside>
+
+      {inspectedSlot?.revealed && (
+        <div
+          className="card-inspector-backdrop"
+          onClick={() => setInspectedIndex(null)}
+          role="presentation"
+        >
+          <article
+            aria-modal="true"
+            className="card-inspector"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+          >
+            <button
+              className="inspector-close"
+              onClick={() => setInspectedIndex(null)}
+              title={beginnerUi.closeInspector[language]}
+              type="button"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="inspector-card-wrap">
+              <div className="inspector-card-art" style={getCardPaletteStyle(inspectedSlot)}>
+                <span>{inspectedSlot.card.glyph}</span>
+                <strong>{inspectedSlot.card.names[language]}</strong>
+                <em>{inspectedSlot.reversed ? ui.reversed[language] : ui.upright[language]}</em>
+              </div>
+            </div>
+
+            <div className="inspector-copy">
+              <p>{beginnerUi.inspectorKicker[language]}</p>
+              <h2>{inspectedSlot.card.names[language]}</h2>
+              <span className={inspectedSlot.reversed ? 'orientation reversed' : 'orientation'}>
+                {inspectedSlot.label[language]} ·{' '}
+                {inspectedSlot.reversed ? ui.reversed[language] : ui.upright[language]}
+              </span>
+              <p className="meaning">
+                {inspectedSlot.reversed
+                  ? inspectedSlot.card.shadow[language]
+                  : inspectedSlot.card.meaning[language]}
+              </p>
+              <div className="beginner-reading">
+                <div>
+                  <strong>{beginnerUi.plainMeaning[language]}</strong>
+                  <span>
+                    {getBeginnerPositionText(inspectedSlot.slotId, language)}{' '}
+                    {inspectedSlot.reversed
+                      ? inspectedSlot.card.shadow[language]
+                      : inspectedSlot.card.meaning[language]}
+                  </span>
+                </div>
+                <div>
+                  <strong>{beginnerUi.nextMove[language]}</strong>
+                  <span>
+                    {beginnerActions[inspectedSlot.reversed ? 'reversed' : 'upright'][language]}
+                  </span>
+                </div>
+              </div>
+              <div className="keyword-cloud" aria-label={ui.keywords[language]}>
+                {inspectedSlot.card.keywords[language].map((keyword) => (
+                  <span key={keyword}>{keyword}</span>
+                ))}
+              </div>
+              <small className="gentle-note">{beginnerUi.inspectorPrompt[language]}</small>
+            </div>
+          </article>
+        </div>
+      )}
     </main>
   );
 }
@@ -477,6 +757,83 @@ function App() {
 function getBeginnerPositionText(slotId: string, language: Locale) {
   const copy = beginnerPositionCopy[slotId as keyof typeof beginnerPositionCopy];
   return copy?.[language] ?? '';
+}
+
+function createReadingId() {
+  if (window.crypto?.randomUUID) {
+    return window.crypto.randomUUID();
+  }
+
+  return `reading-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function persistRecords(records: ReadingRecord[]) {
+  try {
+    window.localStorage.setItem(recordsStorageKey, JSON.stringify(records));
+  } catch {
+    // The app can still run if private browsing or storage quotas block saves.
+  }
+}
+
+function isReadingRecord(record: unknown): record is ReadingRecord {
+  const value = record as Partial<ReadingRecord> | null;
+  return Boolean(
+    value &&
+      typeof value.id === 'string' &&
+      typeof value.createdAt === 'string' &&
+      typeof value.question === 'string' &&
+      typeof value.spreadId === 'string' &&
+      typeof value.modeId === 'string' &&
+      Array.isArray(value.cards) &&
+      value.cards.every(
+        (card) =>
+          typeof card?.slotId === 'string' &&
+          typeof card.cardId === 'string' &&
+          typeof card.reversed === 'boolean',
+      ),
+  );
+}
+
+function getRecordSpread(record: ReadingRecord) {
+  return spreads.find((spread) => spread.id === record.spreadId) ?? spreads[0];
+}
+
+function getRecordMode(record: ReadingRecord) {
+  return readingModes.find((mode) => mode.id === record.modeId) ?? readingModes[0];
+}
+
+function getRecordCards(record: ReadingRecord) {
+  const recordSpread = getRecordSpread(record);
+  return record.cards.map((entry, index) => ({
+    card: tarotDeck.find((card) => card.id === entry.cardId) ?? tarotDeck[0],
+    reversed: entry.reversed,
+    slot:
+      recordSpread.slots.find((slot) => slot.id === entry.slotId) ??
+      recordSpread.slots[index] ??
+      recordSpread.slots[0],
+  }));
+}
+
+function formatRecordDate(createdAt: string, language: Locale) {
+  const date = new Date(createdAt);
+  if (Number.isNaN(date.getTime())) {
+    return createdAt;
+  }
+
+  return new Intl.DateTimeFormat(language, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
+
+function getCardPaletteStyle(slot: ReadingSlot) {
+  return {
+    '--card-primary': slot.card.palette[0],
+    '--card-secondary': slot.card.palette[1],
+    '--card-dark': slot.card.palette[2],
+  } as React.CSSProperties;
 }
 
 export default App;

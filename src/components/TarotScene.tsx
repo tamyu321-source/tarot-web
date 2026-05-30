@@ -6,6 +6,7 @@ interface TarotSceneProps {
   activeIndex: number | null;
   language: Locale;
   onDraw: () => void;
+  onInspect: (index: number) => void;
   reading: ReadingSlot[];
   spread: SpreadDefinition;
   onReveal: (index: number) => void;
@@ -43,6 +44,7 @@ export default function TarotScene({
   activeIndex,
   language,
   onDraw,
+  onInspect,
   reading,
   spread,
   onReveal,
@@ -50,9 +52,11 @@ export default function TarotScene({
   const mountRef = useRef<HTMLDivElement | null>(null);
   const controllerRef = useRef<SceneController | null>(null);
   const drawRef = useRef(onDraw);
+  const inspectRef = useRef(onInspect);
   const revealRef = useRef(onReveal);
 
   drawRef.current = onDraw;
+  inspectRef.current = onInspect;
   revealRef.current = onReveal;
 
   useEffect(() => {
@@ -65,6 +69,9 @@ export default function TarotScene({
       () => drawRef.current(),
       (index) => {
         revealRef.current(index);
+      },
+      (index) => {
+        inspectRef.current(index);
       },
     );
 
@@ -123,6 +130,7 @@ class SceneController {
     private readonly mount: HTMLDivElement,
     private readonly onDraw: () => void,
     private readonly onReveal: (index: number) => void,
+    private readonly onInspect: (index: number) => void,
   ) {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setClearColor(0x000000, 0);
@@ -264,6 +272,11 @@ class SceneController {
     const interactive = this.interactiveCards[this.hoverIndex];
     if (interactive && interactive.drawn && !interactive.revealed) {
       this.onReveal(interactive.slotIndex);
+      return;
+    }
+
+    if (interactive && interactive.drawn && interactive.revealed) {
+      this.onInspect(interactive.slotIndex);
     }
   };
 
@@ -502,7 +515,7 @@ class SceneController {
       const drawProgress = easeOutCubic(clamp01((elapsed - interactive.drawnAt) / 0.95));
       interactive.currentDraw = Math.max(interactive.currentDraw, drawProgress);
       const deal = interactive.currentDraw;
-      const hover = this.hoverIndex === index && !interactive.revealed ? 1 : 0;
+      const hover = this.hoverIndex === index ? 1 : 0;
       const active = this.activeIndex === index ? 1 : 0;
       interactive.currentFlip += (interactive.targetFlip - interactive.currentFlip) * 0.105;
 
@@ -587,7 +600,7 @@ class SceneController {
     this.hoverIndex = nextIndex >= 0 ? nextIndex : null;
     const interactive = this.hoverIndex === null ? null : this.interactiveCards[this.hoverIndex];
     this.renderer.domElement.style.cursor =
-      interactive && interactive.drawn && !interactive.revealed ? 'pointer' : 'default';
+      interactive && interactive.drawn ? 'pointer' : 'default';
   }
 }
 

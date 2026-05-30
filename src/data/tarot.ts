@@ -231,14 +231,69 @@ export const beginnerUi = {
     ja: '最後に重なるキーワードを見てください。それが持ち帰るべき糸口です。',
   },
   completeReviewHint: {
-    'zh-TW': '點任一牌位可以回看單張解讀。',
-    en: 'Select any position to revisit its card reading.',
-    ja: '任意の位置を選ぶと、そのカードの読みを見返せます。',
+    'zh-TW': '點任一牌位可以把牌放到正面，回看單張解讀。',
+    en: 'Select any position to bring the card forward and revisit its reading.',
+    ja: '任意の位置を選ぶと、カードを正面で見返せます。',
   },
   applyTemplate: {
     'zh-TW': '套用',
     en: 'Use',
     ja: '使う',
+  },
+  inspectCard: {
+    'zh-TW': '正面查看',
+    en: 'Inspect Card',
+    ja: '正面で見る',
+  },
+  closeInspector: {
+    'zh-TW': '關閉查看',
+    en: 'Close View',
+    ja: '閉じる',
+  },
+  inspectorKicker: {
+    'zh-TW': '單張牌面',
+    en: 'Card Focus',
+    ja: 'カード詳細',
+  },
+  inspectorPrompt: {
+    'zh-TW': '再次點擊已翻開的牌，也能把它放到正面檢視。',
+    en: 'Click any revealed card again to bring it forward for a closer look.',
+    ja: '開いたカードをもう一度クリックすると、正面で詳しく見られます。',
+  },
+  journalTitle: {
+    'zh-TW': '閱讀記錄',
+    en: 'Reading Journal',
+    ja: 'リーディング記録',
+  },
+  journalBody: {
+    'zh-TW': '完成的牌陣會存在這台裝置，之後可以回來看當時的問題與牌面。',
+    en: 'Completed spreads are saved on this device so you can revisit the question and cards later.',
+    ja: '完成したスプレッドはこの端末に保存され、後から問いとカードを見返せます。',
+  },
+  journalEmpty: {
+    'zh-TW': '完成一次閱讀後，這裡會留下你的牌陣時間線。',
+    en: 'Finish a reading and your spread timeline will appear here.',
+    ja: 'リーディングを完了すると、ここに履歴が残ります。',
+  },
+  journalSaved: {
+    'zh-TW': '已存入本機記錄',
+    en: 'Saved locally',
+    ja: '端末に保存済み',
+  },
+  latestRecord: {
+    'zh-TW': '最新',
+    en: 'Latest',
+    ja: '最新',
+  },
+  recordCount: {
+    'zh-TW': '{count} 次閱讀',
+    en: '{count} readings',
+    ja: '{count} 件',
+  },
+  recordDetail: {
+    'zh-TW': '回看這次',
+    en: 'Review This',
+    ja: 'この回を見る',
   },
 } as const;
 
