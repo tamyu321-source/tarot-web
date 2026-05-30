@@ -1174,7 +1174,7 @@ button:disabled {
 
 @media (max-width: 760px) {
   :root {
-    --mobile-stage-height: clamp(480px, 62svh, 620px);
+    --mobile-stage-height: clamp(360px, 46svh, 500px);
   }
 
   body {
@@ -1277,7 +1277,7 @@ button:disabled {
   }
 
   .inspector-card-art {
-    width: min(240px, 100%);
+    width: min(300px, calc(100vw - 64px));
     min-height: auto;
   }
 

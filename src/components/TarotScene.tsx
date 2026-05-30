@@ -274,9 +274,9 @@ class SceneController {
     this.isCompactView = isCompact;
     this.renderer.setSize(width, height, false);
     this.camera.aspect = width / height;
-    this.camera.fov = isCompact ? 56 : 42;
-    this.camera.position.set(0, isCompact ? 8.15 : 6.7, isCompact ? 9.55 : 7.8);
-    this.camera.lookAt(0, isCompact ? 0.04 : 0, isCompact ? 0.18 : 0);
+    this.camera.fov = isCompact ? 50 : 42;
+    this.camera.position.set(0, isCompact ? 7.45 : 6.7, isCompact ? 8.55 : 7.8);
+    this.camera.lookAt(0, isCompact ? 0.02 : 0, isCompact ? 0.12 : 0);
     this.camera.updateProjectionMatrix();
   };
 
@@ -725,7 +725,7 @@ class SceneController {
         interactive.group.rotation.x = interactive.currentFlip * Math.PI + this.pointer.y * 0.12;
         interactive.group.rotation.y = this.pointer.x * 0.42;
         interactive.group.rotation.z = interactive.baseRotation + this.pointer.x * 0.16;
-        const dragScale = 1.09 + active * 0.02;
+        const dragScale = (this.isCompactView ? 1.2 : 1.09) + active * 0.02;
         interactive.mesh.scale.set(dragScale, dragScale, dragScale);
         return;
       }
@@ -762,7 +762,10 @@ class SceneController {
         Math.sin(elapsed * 2.4 + index) * 0.012 * deal;
 
       const burst = Math.max(0, 1 - (elapsed - interactive.burstAt) / 0.75);
-      const meshScale = 1 + hover * 0.035 + active * 0.025 + burst * 0.08 + Math.sin(packPop * Math.PI) * 0.12;
+      const compactScale = this.isCompactView ? 1.16 : 1;
+      const meshScale =
+        compactScale *
+        (1 + hover * 0.035 + active * 0.025 + burst * 0.08 + Math.sin(packPop * Math.PI) * 0.12);
       interactive.mesh.scale.set(meshScale, meshScale, meshScale);
     });
   }
