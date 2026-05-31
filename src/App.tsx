@@ -18,6 +18,7 @@ import {
   Share2,
   Shuffle,
   Sparkles,
+  Trash2,
   WandSparkles,
   X,
 } from 'lucide-react';
@@ -66,6 +67,7 @@ interface PlainReadingNarrative {
   }>;
   actionPlan: string;
   reminder: string;
+  directSummary?: string;
   keywords: string[];
 }
 
@@ -203,6 +205,21 @@ const engagementUi = {
     en: 'Share image created',
     ja: 'シェア画像を作成しました',
   },
+  clearHistory: {
+    'zh-TW': '清空',
+    en: 'Clear',
+    ja: '削除',
+  },
+  clearHistoryTitle: {
+    'zh-TW': '清空閱讀記錄',
+    en: 'Clear reading history',
+    ja: '履歴を削除',
+  },
+  clearHistoryConfirm: {
+    'zh-TW': '確定要清空所有閱讀記錄嗎？這會刪除保存在這台裝置上的牌陣、總結和復盤筆記。',
+    en: 'Clear all reading history? This will delete spreads, summaries, and reflection notes saved on this device.',
+    ja: 'すべての履歴を削除しますか？この端末に保存された展開、まとめ、振り返りメモが削除されます。',
+  },
 } as const;
 
 const plainSummaryUi = {
@@ -235,6 +252,11 @@ const plainSummaryUi = {
     'zh-TW': '最後提醒',
     en: 'Final Note',
     ja: '最後のメモ',
+  },
+  directSummary: {
+    'zh-TW': '建議與預測',
+    en: 'Advice and Prediction',
+    ja: '助言と予測',
   },
 } as const;
 
@@ -296,7 +318,8 @@ function App() {
   const dailyCard = tarotDeck.find((card) => card.id === dailyEntry.cardId) ?? tarotDeck[0];
   const insights = useMemo(() => getInsights(records, language), [language, records]);
   const recordCountText = beginnerUi.recordCount[language].replace('{count}', String(records.length));
-  const isCurrentReadingSaved = completed && savedReadingId === readingSessionId;
+  const isCurrentReadingSaved =
+    Boolean(currentRecord) && completed && savedReadingId === readingSessionId;
   const plainNarrative = useMemo(
     () =>
       completed
@@ -532,6 +555,23 @@ function App() {
           : record,
       ),
     );
+  };
+
+  const clearReadingHistory = () => {
+    if (records.length === 0) {
+      return;
+    }
+
+    if (!window.confirm(engagementUi.clearHistoryConfirm[language])) {
+      return;
+    }
+
+    persistRecords([]);
+    setRecords([]);
+    setSelectedRecordId(null);
+    setSavedReadingId(readingSessionId);
+    setReviewDraft('');
+    setShareNotice('');
   };
 
   const downloadSelectedShareCard = (record: ReadingRecord) => {
@@ -968,7 +1008,19 @@ function App() {
                   : beginnerUi.journalEmpty[language]}
               </span>
             </div>
-            <em>{isCurrentReadingSaved ? beginnerUi.journalSaved[language] : recordCountText}</em>
+            <div className="record-panel-meta">
+              <em>{isCurrentReadingSaved ? beginnerUi.journalSaved[language] : recordCountText}</em>
+              {records.length > 0 && (
+                <button
+                  onClick={clearReadingHistory}
+                  title={engagementUi.clearHistoryTitle[language]}
+                  type="button"
+                >
+                  <Trash2 size={14} />
+                  <span>{engagementUi.clearHistory[language]}</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {records.length > 0 ? (
@@ -1194,6 +1246,8 @@ function PlainNarrativeBlock({
   language: Locale;
   narrative: PlainReadingNarrative;
 }) {
+  const directSummary = narrative.directSummary || narrative.headline;
+
   return (
     <div className="plain-language-summary">
       <div className="plain-language-summary-heading">
@@ -1232,6 +1286,11 @@ function PlainNarrativeBlock({
       <section className="plain-summary-section">
         <span>{plainSummaryUi.reminder[language]}</span>
         <p>{narrative.reminder}</p>
+      </section>
+
+      <section className="plain-summary-section direct-human-summary">
+        <span>{plainSummaryUi.directSummary[language]}</span>
+        <p>{directSummary}</p>
       </section>
     </div>
   );
@@ -1369,6 +1428,7 @@ function isPlainReadingNarrative(value: unknown): value is PlainReadingNarrative
       typeof narrative.overview === 'string' &&
       typeof narrative.actionPlan === 'string' &&
       typeof narrative.reminder === 'string' &&
+      (narrative.directSummary === undefined || typeof narrative.directSummary === 'string') &&
       isStringArray(narrative.keywords) &&
       Array.isArray(narrative.cardBreakdown) &&
       narrative.cardBreakdown.every(
@@ -1494,6 +1554,7 @@ function createPlainReadingNarrative(
       cardBreakdown: [],
       actionPlan: '',
       reminder: '',
+      directSummary: '',
       keywords: [],
     };
   }
@@ -1512,6 +1573,7 @@ function createPlainReadingNarrative(
         : getSummaryMixedTone(language);
   const headline = createNarrativeHeadline(focusSlot, actionSlot, language);
   const actionPlan = createNarrativeActionPlan(focusSlot, actionSlot, language);
+  const directSummary = createDirectHumanSummary(focusSlot, actionSlot, language);
 
   if (language === 'en') {
     return {
@@ -1520,6 +1582,7 @@ function createPlainReadingNarrative(
       cardBreakdown: slots.map((slot) => createCardNarrative(slot, language)),
       actionPlan,
       reminder: 'Use this as a decision note, not as a verdict. The useful part is what it helps you name, test, and follow up on later.',
+      directSummary,
       keywords,
     };
   }
@@ -1531,6 +1594,7 @@ function createPlainReadingNarrative(
       cardBreakdown: slots.map((slot) => createCardNarrative(slot, language)),
       actionPlan,
       reminder: 'これは判決ではなく、考えを整理するためのメモです。役に立つ部分は、気づいたことを言葉にし、試し、後で振り返れることです。',
+      directSummary,
       keywords,
     };
   }
@@ -1541,6 +1605,7 @@ function createPlainReadingNarrative(
     cardBreakdown: slots.map((slot) => createCardNarrative(slot, language)),
     actionPlan,
     reminder: '塔羅在這裡不是替你做決定，而是把混在一起的感受拆開。真正要帶走的是：你現在看見了什麼、哪一張牌最像你的現況、以及你下一步真的做了什麼。',
+    directSummary,
     keywords,
   };
 }
@@ -1623,6 +1688,263 @@ function createNarrativeActionPlan(
   return `今天先把「${focusKeyword}」對應到一件真實發生的事，寫成一句：「我現在其實在面對____。」然後把「${actionKeyword}」變成一個 15 分鐘內能完成的動作：傳一則訊息、寫一段整理、列一張清單、劃一條界線，或安排下一個時間點。做完再記下實際變化，不要只停在想。`;
 }
 
+function createDirectHumanSummary(
+  focusSlot: ReadingSlot,
+  actionSlot: ReadingSlot,
+  language: Locale,
+) {
+  const prediction = getDirectPrediction(focusSlot, actionSlot, language);
+  const advice = getDirectAdvice(actionSlot, language);
+  const avoid = getDirectAvoidance(actionSlot, language);
+
+  if (language === 'en') {
+    return `Prediction: ${prediction} Advice: ${advice} Avoid: ${avoid}`;
+  }
+
+  if (language === 'ja') {
+    return `予測：${prediction} 助言：${advice} 避けること：${avoid}`;
+  }
+
+  return `預測：${prediction} 建議：${advice} 不要：${avoid}`;
+}
+
+function getDirectPrediction(
+  focusSlot: ReadingSlot,
+  actionSlot: ReadingSlot,
+  language: Locale,
+) {
+  const actionTheme = getOutcomeTheme(actionSlot, language);
+  const speed = actionSlot.reversed
+    ? getReversedOutcomeText(actionSlot, language)
+    : getUprightOutcomeText(actionSlot, language);
+  const focus = getCurrentPressureText(focusSlot, language);
+
+  if (language === 'en') {
+    return `${focus} In the short term, ${actionTheme}. ${speed}`;
+  }
+
+  if (language === 'ja') {
+    return `${focus}短期的には${actionTheme}。${speed}`;
+  }
+
+  return `${focus}短期來看，${actionTheme}。${speed}`;
+}
+
+function getDirectAdvice(slot: ReadingSlot, language: Locale) {
+  if (language === 'en') {
+    if (slot.card.suit === 'wands') {
+      return 'Take the initiative today: set a time, propose a plan, or start the smallest version immediately.';
+    }
+    if (slot.card.suit === 'cups') {
+      return 'Say the real feeling or expectation clearly. Do not wait for the other person to guess.';
+    }
+    if (slot.card.suit === 'swords') {
+      return 'Write the problem in three plain sentences, then ask, reply, or clarify one thing today.';
+    }
+    if (slot.card.suit === 'pentacles') {
+      return 'Handle the practical detail first: money, time, documents, schedule, or the next concrete task.';
+    }
+    return 'Make one clear choice today and act on it. A small response is better than waiting for certainty.';
+  }
+
+  if (language === 'ja') {
+    if (slot.card.suit === 'wands') {
+      return '今日は自分から動いてください。時間を決める、案を出す、最小版をすぐ始める、のどれかです。';
+    }
+    if (slot.card.suit === 'cups') {
+      return '本当の気持ちや期待をはっきり言ってください。相手が察するのを待たないでください。';
+    }
+    if (slot.card.suit === 'swords') {
+      return '問題を三つの短い文に書き、今日ひとつだけ質問、返信、確認をしてください。';
+    }
+    if (slot.card.suit === 'pentacles') {
+      return 'まず現実的な細部を片づけてください。お金、時間、書類、予定、次の作業のどれかです。';
+    }
+    return '今日は一つだけはっきり選び、行動してください。確信を待つより、小さく返す方が大事です。';
+  }
+
+  if (slot.card.suit === 'wands') {
+    return '今天你要主動一點：定時間、提方案，或先開一個最小版本，不要等氣氛剛好。';
+  }
+  if (slot.card.suit === 'cups') {
+    return '把真正的感受或期待說清楚，不要讓對方猜，也不要自己悶著演內心戲。';
+  }
+  if (slot.card.suit === 'swords') {
+    return '把問題寫成三句人話，今天就問清楚、回清楚，或把該說的話說出來。';
+  }
+  if (slot.card.suit === 'pentacles') {
+    return '先處理現實細節：錢、時間、資料、排程、下一個待辦，選一個今天完成。';
+  }
+  return '今天先做一個明確選擇，然後給出一個小回應；不要等到完全確定才動。';
+}
+
+function getDirectAvoidance(
+  actionSlot: ReadingSlot,
+  language: Locale,
+) {
+  const delayText = actionSlot.reversed
+    ? {
+        'zh-TW': '硬衝、逼答案、立刻攤牌。',
+        en: 'forcing the answer, rushing the talk, or pushing for an immediate result.',
+        ja: '答えを急ぐこと、無理に話を進めること、すぐ結果を求めること。',
+      }[language]
+    : {
+        'zh-TW': '拖延、觀望、一直等別人先動。',
+        en: 'delaying, watching passively, or waiting for someone else to move first.',
+        ja: '先延ばし、様子見だけ、相手が先に動くのを待つこと。',
+      }[language];
+
+  if (language === 'en') {
+    return `${delayText} Do not turn the current pressure into another round of overthinking.`;
+  }
+
+  if (language === 'ja') {
+    return `${delayText}今のプレッシャーを、また考えすぎるだけの状態にしないでください。`;
+  }
+
+  return `${delayText}也不要把現在的壓力變成新一輪空想和內耗。`;
+}
+
+function getCurrentPressureText(slot: ReadingSlot, language: Locale) {
+  const area = getLifeAreaText(slot, language);
+
+  if (language === 'en') {
+    return slot.reversed
+      ? `Right now, the main blockage is ${area}.`
+      : `Right now, the part that can still move is ${area}.`;
+  }
+
+  if (language === 'ja') {
+    return slot.reversed
+      ? `今の主な詰まりは${area}です。`
+      : `今まだ動かせる部分は${area}です。`;
+  }
+
+  return slot.reversed
+    ? `現在主要卡在${area}。`
+    : `現在還能推進的是${area}。`;
+}
+
+function getLifeAreaText(slot: ReadingSlot, language: Locale) {
+  if (language === 'en') {
+    if (slot.card.suit === 'wands') {
+      return 'action, initiative, and who moves first';
+    }
+    if (slot.card.suit === 'cups') {
+      return 'feelings, expectations, and the relationship dynamic';
+    }
+    if (slot.card.suit === 'swords') {
+      return 'communication, information, and the decision that needs to be made';
+    }
+    if (slot.card.suit === 'pentacles') {
+      return 'time, money, work, resources, and practical arrangements';
+    }
+    return 'a bigger choice or turning point that needs a clear response';
+  }
+
+  if (language === 'ja') {
+    if (slot.card.suit === 'wands') {
+      return '行動、主導権、誰が先に動くか';
+    }
+    if (slot.card.suit === 'cups') {
+      return '気持ち、期待、関係の流れ';
+    }
+    if (slot.card.suit === 'swords') {
+      return '連絡、情報、決めるべき判断';
+    }
+    if (slot.card.suit === 'pentacles') {
+      return '時間、お金、仕事、資源、現実的な段取り';
+    }
+    return 'はっきり返事をするべき大きな選択や転機';
+  }
+
+  if (slot.card.suit === 'wands') {
+    return '行動、主動權，以及誰先動';
+  }
+  if (slot.card.suit === 'cups') {
+    return '感受、期待，以及關係裡有沒有講清楚';
+  }
+  if (slot.card.suit === 'swords') {
+    return '溝通、資訊，以及該不該做決定';
+  }
+  if (slot.card.suit === 'pentacles') {
+    return '時間、錢、工作、資源和現實安排';
+  }
+  return '一個需要你明確表態或做選擇的轉折';
+}
+
+function getOutcomeTheme(slot: ReadingSlot, language: Locale) {
+  if (language === 'en') {
+    if (slot.card.suit === 'wands') {
+      return 'things will move through action, competition, urgency, or someone taking initiative';
+    }
+    if (slot.card.suit === 'cups') {
+      return 'the outcome will depend on feelings, relationship signals, and whether people speak honestly';
+    }
+    if (slot.card.suit === 'swords') {
+      return 'messages, decisions, wording, or missing information will decide the direction';
+    }
+    if (slot.card.suit === 'pentacles') {
+      return 'the result will be decided by practical conditions: time, money, work, documents, or resources';
+    }
+    return 'a turning point is likely, and it will ask for a clear response from you';
+  }
+
+  if (language === 'ja') {
+    if (slot.card.suit === 'wands') {
+      return '行動、競争、急ぎ、または誰かの主導で物事が動きます';
+    }
+    if (slot.card.suit === 'cups') {
+      return '気持ち、関係性、正直に話せるかどうかで結果が変わります';
+    }
+    if (slot.card.suit === 'swords') {
+      return '連絡、判断、言葉、足りない情報が流れを決めます';
+    }
+    if (slot.card.suit === 'pentacles') {
+      return '時間、お金、仕事、書類、資源など現実条件で結果が決まります';
+    }
+    return '転機が来やすく、あなたの明確な反応が必要になります';
+  }
+
+  if (slot.card.suit === 'wands') {
+    return '事情會靠行動、競爭、急迫感，或某個人主動推進而變化';
+  }
+  if (slot.card.suit === 'cups') {
+    return '結果會跟情緒、關係、彼此有沒有說真話有關';
+  }
+  if (slot.card.suit === 'swords') {
+    return '接下來會被訊息、溝通、決定，或缺少的資訊影響';
+  }
+  if (slot.card.suit === 'pentacles') {
+    return '結果會卡在現實條件上，比如時間、錢、工作、文件或資源安排';
+  }
+  return '會有一個轉折，但它會要求你明確表態或做選擇';
+}
+
+function getReversedOutcomeText(slot: ReadingSlot, language: Locale) {
+  if (language === 'en') {
+    return `${slot.card.names[language]} is reversed, so it probably will not go smoothly at first; expect delay, confusion, or one round of adjustment.`;
+  }
+
+  if (language === 'ja') {
+    return `${slot.card.names[language]}が逆位置なので、最初から順調には進みにくく、遅れ、混乱、調整が一度入りそうです。`;
+  }
+
+  return `${slot.card.names[language]}是逆位，所以不會一開始就順，容易先出現拖延、誤會，或需要返工調整。`;
+}
+
+function getUprightOutcomeText(slot: ReadingSlot, language: Locale) {
+  if (language === 'en') {
+    return `${slot.card.names[language]} is upright, so there is a usable opening; the situation can move if someone takes one clear step.`;
+  }
+
+  if (language === 'ja') {
+    return `${slot.card.names[language]}が正位置なので、使える入口があります。誰かが一つはっきり動けば、状況は進みます。`;
+  }
+
+  return `${slot.card.names[language]}是正位，代表有可以推進的窗口；只要有人先做一個明確動作，局面就會動。`;
+}
+
 function getSlotOrientation(slot: ReadingSlot, language: Locale) {
   return slot.reversed ? ui.reversed[language] : ui.upright[language];
 }
@@ -1636,7 +1958,13 @@ function getPrimaryKeyword(slot: ReadingSlot, language: Locale) {
 }
 
 function isStalePlainSummary(narrative: PlainReadingNarrative) {
+  const hasCurrentDirectSummary =
+    narrative.directSummary?.startsWith('預測：') ||
+    narrative.directSummary?.startsWith('Prediction:') ||
+    narrative.directSummary?.startsWith('予測：');
+
   return (
+    !hasCurrentDirectSummary ||
     narrative.headline.startsWith('這次不是在叫你猜結果，而是在說：先把') ||
     narrative.headline.startsWith('This is not mainly about predicting an outcome.') ||
     narrative.headline.startsWith('これは未来を当てるためだけの結果ではありません。まず')
@@ -1905,7 +2233,7 @@ function downloadShareCard(record: ReadingRecord, language: Locale) {
   wrapCanvasText(
     context,
     narrative.headline
-      ? `${narrative.headline} ${narrative.actionPlan}`
+      ? `${narrative.directSummary ?? narrative.headline} ${narrative.actionPlan}`
       : language === 'en'
         ? 'A small mirror for the next step.'
         : language === 'ja'
