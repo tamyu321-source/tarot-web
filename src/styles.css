@@ -662,6 +662,80 @@ button:disabled {
   gap: 8px;
 }
 
+.plain-language-summary {
+  display: grid;
+  gap: 12px;
+  border: 1px solid rgba(242, 198, 109, 0.22);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(242, 198, 109, 0.1), rgba(114, 214, 189, 0.08)),
+    rgba(10, 9, 10, 0.24);
+  padding: 12px;
+}
+
+.plain-language-summary-heading {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  color: var(--gold);
+}
+
+.plain-language-summary-heading strong {
+  overflow-wrap: anywhere;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.plain-summary-section {
+  display: grid;
+  gap: 5px;
+}
+
+.plain-summary-section > span {
+  color: var(--gold);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.plain-summary-section p,
+.plain-summary-card p {
+  margin: 0;
+  color: rgba(255, 247, 231, 0.9);
+  font-size: 0.92rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.plain-summary-card-list {
+  display: grid;
+  gap: 8px;
+}
+
+.plain-summary-card {
+  display: grid;
+  gap: 5px;
+  border: 1px solid rgba(255, 235, 195, 0.12);
+  border-radius: 8px;
+  background: rgba(10, 9, 10, 0.23);
+  padding: 9px;
+}
+
+.plain-summary-card strong {
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 0.88rem;
+}
+
+.plain-summary-card em {
+  color: #bdeedd;
+  font-size: 0.82rem;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
 .completion-card {
   display: grid;
   grid-template-columns: minmax(48px, 0.32fr) minmax(0, 1fr) auto;

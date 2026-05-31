@@ -41,20 +41,49 @@ const recordsStorageKey = 'arcana-kin-reading-records';
 const maxStoredRecords = 60;
 const oneDayMs = 24 * 60 * 60 * 1000;
 
+interface ReadingRecordCard {
+  slotId: string;
+  cardId: string;
+  reversed: boolean;
+  slotLabel?: string;
+  cardName?: string;
+  orientationLabel?: string;
+  keywords?: string[];
+  positionText?: string;
+  meaning?: string;
+  nextMove?: string;
+}
+
+interface PlainReadingNarrative {
+  headline: string;
+  overview: string;
+  cardBreakdown: Array<{
+    slotId: string;
+    cardId: string;
+    title: string;
+    body: string;
+    action: string;
+  }>;
+  actionPlan: string;
+  reminder: string;
+  keywords: string[];
+}
+
 interface ReadingRecord {
   id: string;
   createdAt: string;
   question: string;
   spreadId: string;
   modeId: string;
+  language?: Locale;
+  spreadLabel?: string;
+  spreadDescription?: string;
+  modeLabel?: string;
+  plainSummary?: PlainReadingNarrative;
   reviewDueAt?: string;
   reviewedAt?: string;
   reviewNote?: string;
-  cards: Array<{
-    slotId: string;
-    cardId: string;
-    reversed: boolean;
-  }>;
+  cards: ReadingRecordCard[];
 }
 
 interface DailyCardEntry {
@@ -176,6 +205,39 @@ const engagementUi = {
   },
 } as const;
 
+const plainSummaryUi = {
+  title: {
+    'zh-TW': '大白話總結',
+    en: 'Plain Summary',
+    ja: 'やさしいまとめ',
+  },
+  conclusion: {
+    'zh-TW': '先講結論',
+    en: 'Bottom Line',
+    ja: 'まず結論',
+  },
+  overview: {
+    'zh-TW': '這個牌陣在說什麼',
+    en: 'What This Reading Says',
+    ja: 'この展開が言っていること',
+  },
+  cardBreakdown: {
+    'zh-TW': '逐張翻成白話',
+    en: 'Card By Card',
+    ja: 'カードごとに',
+  },
+  actionPlan: {
+    'zh-TW': '接下來怎麼做',
+    en: 'What To Do Next',
+    ja: '次にすること',
+  },
+  reminder: {
+    'zh-TW': '最後提醒',
+    en: 'Final Note',
+    ja: '最後のメモ',
+  },
+} as const;
+
 function App() {
   const [language, setLanguage] = useState<Locale>('zh-TW');
   const [spreadId, setSpreadId] = useState(spreads[0].id);
@@ -225,6 +287,9 @@ function App() {
     records[0] ??
     null;
   const selectedRecordCards = selectedRecord ? getRecordCards(selectedRecord) : [];
+  const selectedRecordNarrative = selectedRecord
+    ? getRecordNarrative(selectedRecord, language)
+    : null;
   const currentRecord = savedReadingId
     ? records.find((record) => record.id === savedReadingId) ?? null
     : null;
@@ -232,6 +297,13 @@ function App() {
   const insights = useMemo(() => getInsights(records, language), [language, records]);
   const recordCountText = beginnerUi.recordCount[language].replace('{count}', String(records.length));
   const isCurrentReadingSaved = completed && savedReadingId === readingSessionId;
+  const plainNarrative = useMemo(
+    () =>
+      completed
+        ? createPlainReadingNarrative(completedCards, language, readingQuestion)
+        : null,
+    [completed, language, reading, readingQuestion],
+  );
 
   useEffect(() => {
     try {
@@ -247,7 +319,9 @@ function App() {
 
       const normalizedRecords = parsedRecords
         .filter(isReadingRecord)
+        .map(normalizeReadingRecord)
         .slice(0, maxStoredRecords);
+      persistRecords(normalizedRecords);
       setRecords(normalizedRecords);
       setSelectedRecordId(normalizedRecords[0]?.id ?? null);
     } catch {
@@ -270,11 +344,13 @@ function App() {
       question: readingQuestion,
       spreadId: spread.id,
       modeId: mode.id,
-      cards: reading.map((slot) => ({
-        slotId: slot.slotId,
-        cardId: slot.card.id,
-        reversed: slot.reversed,
-      })),
+      language,
+      spreadLabel: spread.labels[language],
+      spreadDescription: spread.description[language],
+      modeLabel: mode.labels[language],
+      plainSummary:
+        plainNarrative ?? createPlainReadingNarrative(reading, language, readingQuestion),
+      cards: createStoredReadingCards(reading, language),
     };
 
     setRecords((currentRecords) => {
@@ -289,12 +365,17 @@ function App() {
     setSavedReadingId(record.id);
   }, [
     completed,
+    language,
     mode.id,
+    mode.labels,
+    plainNarrative,
     reading,
     readingQuestion,
     readingSessionId,
     savedReadingId,
+    spread.description,
     spread.id,
+    spread.labels,
   ]);
 
   useEffect(() => {
@@ -723,6 +804,9 @@ function App() {
                 </button>
               ))}
             </div>
+            {plainNarrative && (
+              <PlainNarrativeBlock language={language} narrative={plainNarrative} />
+            )}
             <small>{beginnerUi.completeReviewHint[language]}</small>
             {currentRecord && (
               <div className="review-scheduler">
@@ -971,6 +1055,12 @@ function App() {
                     <strong>{formatRecordDate(selectedRecord.createdAt, language)}</strong>
                   </div>
                   <p>{selectedRecord.question}</p>
+                  {selectedRecordNarrative && (
+                    <PlainNarrativeBlock
+                      language={language}
+                      narrative={selectedRecordNarrative}
+                    />
+                  )}
                   <div className="record-action-row">
                     <button onClick={() => downloadSelectedShareCard(selectedRecord)} type="button">
                       <Share2 size={15} />
@@ -1097,6 +1187,56 @@ function App() {
   );
 }
 
+function PlainNarrativeBlock({
+  language,
+  narrative,
+}: {
+  language: Locale;
+  narrative: PlainReadingNarrative;
+}) {
+  return (
+    <div className="plain-language-summary">
+      <div className="plain-language-summary-heading">
+        <MessageSquareText size={16} />
+        <strong>{plainSummaryUi.title[language]}</strong>
+      </div>
+
+      <section className="plain-summary-section">
+        <span>{plainSummaryUi.conclusion[language]}</span>
+        <p>{narrative.headline}</p>
+      </section>
+
+      <section className="plain-summary-section">
+        <span>{plainSummaryUi.overview[language]}</span>
+        <p>{narrative.overview}</p>
+      </section>
+
+      <section className="plain-summary-section">
+        <span>{plainSummaryUi.cardBreakdown[language]}</span>
+        <div className="plain-summary-card-list">
+          {narrative.cardBreakdown.map((item) => (
+            <div className="plain-summary-card" key={`${item.slotId}-${item.cardId}`}>
+              <strong>{item.title}</strong>
+              <p>{item.body}</p>
+              <em>{item.action}</em>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="plain-summary-section">
+        <span>{plainSummaryUi.actionPlan[language]}</span>
+        <p>{narrative.actionPlan}</p>
+      </section>
+
+      <section className="plain-summary-section">
+        <span>{plainSummaryUi.reminder[language]}</span>
+        <p>{narrative.reminder}</p>
+      </section>
+    </div>
+  );
+}
+
 function getBeginnerPositionText(slotId: string, language: Locale) {
   const copy = beginnerPositionCopy[slotId as keyof typeof beginnerPositionCopy];
   return copy?.[language] ?? '';
@@ -1188,6 +1328,11 @@ function isReadingRecord(record: unknown): record is ReadingRecord {
       typeof value.question === 'string' &&
       typeof value.spreadId === 'string' &&
       typeof value.modeId === 'string' &&
+      (value.language === undefined || isLocale(value.language)) &&
+      (value.spreadLabel === undefined || typeof value.spreadLabel === 'string') &&
+      (value.spreadDescription === undefined || typeof value.spreadDescription === 'string') &&
+      (value.modeLabel === undefined || typeof value.modeLabel === 'string') &&
+      (value.plainSummary === undefined || isPlainReadingNarrative(value.plainSummary)) &&
       (value.reviewDueAt === undefined || typeof value.reviewDueAt === 'string') &&
       (value.reviewedAt === undefined || typeof value.reviewedAt === 'string') &&
       (value.reviewNote === undefined || typeof value.reviewNote === 'string') &&
@@ -1196,7 +1341,43 @@ function isReadingRecord(record: unknown): record is ReadingRecord {
         (card) =>
           typeof card?.slotId === 'string' &&
           typeof card.cardId === 'string' &&
-          typeof card.reversed === 'boolean',
+          typeof card.reversed === 'boolean' &&
+          (card.slotLabel === undefined || typeof card.slotLabel === 'string') &&
+          (card.cardName === undefined || typeof card.cardName === 'string') &&
+          (card.orientationLabel === undefined || typeof card.orientationLabel === 'string') &&
+          (card.keywords === undefined || isStringArray(card.keywords)) &&
+          (card.positionText === undefined || typeof card.positionText === 'string') &&
+          (card.meaning === undefined || typeof card.meaning === 'string') &&
+          (card.nextMove === undefined || typeof card.nextMove === 'string'),
+      ),
+  );
+}
+
+function isLocale(value: unknown): value is Locale {
+  return value === 'zh-TW' || value === 'en' || value === 'ja';
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
+function isPlainReadingNarrative(value: unknown): value is PlainReadingNarrative {
+  const narrative = value as Partial<PlainReadingNarrative> | null;
+  return Boolean(
+    narrative &&
+      typeof narrative.headline === 'string' &&
+      typeof narrative.overview === 'string' &&
+      typeof narrative.actionPlan === 'string' &&
+      typeof narrative.reminder === 'string' &&
+      isStringArray(narrative.keywords) &&
+      Array.isArray(narrative.cardBreakdown) &&
+      narrative.cardBreakdown.every(
+        (item) =>
+          typeof item?.slotId === 'string' &&
+          typeof item.cardId === 'string' &&
+          typeof item.title === 'string' &&
+          typeof item.body === 'string' &&
+          typeof item.action === 'string',
       ),
   );
 }
@@ -1219,6 +1400,318 @@ function getRecordCards(record: ReadingRecord) {
       recordSpread.slots[index] ??
       recordSpread.slots[0],
   }));
+}
+
+function normalizeReadingRecord(record: ReadingRecord): ReadingRecord {
+  const language = record.language ?? 'zh-TW';
+  const recordSpread = getRecordSpread(record);
+  const recordMode = getRecordMode(record);
+  const readingSlots = getRecordReadingSlots({ ...record, language }, language);
+  const storedCards = createStoredReadingCards(readingSlots, language);
+
+  return {
+    ...record,
+    language,
+    spreadLabel: record.spreadLabel ?? recordSpread.labels[language],
+    spreadDescription: record.spreadDescription ?? recordSpread.description[language],
+    modeLabel: record.modeLabel ?? recordMode.labels[language],
+    cards: record.cards.map((card, index) => {
+      const storedCard = storedCards[index];
+      return {
+        ...card,
+        keywords: card.keywords ?? storedCard?.keywords,
+        slotLabel: card.slotLabel ?? storedCard?.slotLabel,
+        cardName: card.cardName ?? storedCard?.cardName,
+        orientationLabel: card.orientationLabel ?? storedCard?.orientationLabel,
+        positionText: card.positionText ?? storedCard?.positionText,
+        meaning: card.meaning ?? storedCard?.meaning,
+        nextMove: card.nextMove ?? storedCard?.nextMove,
+      };
+    }),
+    plainSummary:
+      record.plainSummary && !isStalePlainSummary(record.plainSummary)
+        ? record.plainSummary
+        : createPlainReadingNarrative(readingSlots, language, record.question),
+  };
+}
+
+function getRecordNarrative(record: ReadingRecord, language: Locale) {
+  if (record.plainSummary && !isStalePlainSummary(record.plainSummary)) {
+    return record.plainSummary;
+  }
+
+  return createPlainReadingNarrative(getRecordReadingSlots(record, language), language, record.question);
+}
+
+function getRecordReadingSlots(record: ReadingRecord, language: Locale): ReadingSlot[] {
+  const recordSpread = getRecordSpread(record);
+  return record.cards.map((entry, index) => {
+    const card = tarotDeck.find((deckCard) => deckCard.id === entry.cardId) ?? tarotDeck[0];
+    const slot =
+      recordSpread.slots.find((spreadSlot) => spreadSlot.id === entry.slotId) ??
+      recordSpread.slots[index] ??
+      recordSpread.slots[0];
+
+    return {
+      id: `${record.id}-${entry.slotId}-${entry.cardId}-${index}`,
+      slotId: entry.slotId,
+      label: slot.label,
+      card,
+      drawn: true,
+      reversed: entry.reversed,
+      revealed: true,
+    };
+  });
+}
+
+function createStoredReadingCards(slots: ReadingSlot[], language: Locale): ReadingRecordCard[] {
+  return slots.map((slot) => {
+    const reversed = slot.reversed;
+    return {
+      slotId: slot.slotId,
+      cardId: slot.card.id,
+      reversed,
+      slotLabel: slot.label[language],
+      cardName: slot.card.names[language],
+      orientationLabel: reversed ? ui.reversed[language] : ui.upright[language],
+      keywords: slot.card.keywords[language],
+      positionText: getBeginnerPositionText(slot.slotId, language),
+      meaning: reversed ? slot.card.shadow[language] : slot.card.meaning[language],
+      nextMove: beginnerActions[reversed ? 'reversed' : 'upright'][language],
+    };
+  });
+}
+
+function createPlainReadingNarrative(
+  slots: ReadingSlot[],
+  language: Locale,
+  question = '',
+): PlainReadingNarrative {
+  if (slots.length === 0) {
+    return {
+      headline: '',
+      overview: '',
+      cardBreakdown: [],
+      actionPlan: '',
+      reminder: '',
+      keywords: [],
+    };
+  }
+
+  const focusSlot = getSummaryFocusSlot(slots);
+  const actionSlot = getSummaryActionSlot(slots);
+  const keywords = getSummaryKeywords(slots, language);
+  const keywordText = formatSummaryKeywords(keywords, language);
+  const positionText = slots.map((slot) => slot.label[language]).join(getListSeparator(language));
+  const reversedCount = slots.filter((slot) => slot.reversed).length;
+  const tone =
+    reversedCount > slots.length / 2
+      ? getSummarySlowTone(language)
+      : reversedCount === 0
+        ? getSummaryMoveTone(language)
+        : getSummaryMixedTone(language);
+  const headline = createNarrativeHeadline(focusSlot, actionSlot, language);
+  const actionPlan = createNarrativeActionPlan(focusSlot, actionSlot, language);
+
+  if (language === 'en') {
+    return {
+      headline,
+      overview: `${question ? `You asked: "${question}". ` : ''}The spread breaks the situation into ${positionText}. The clearest themes are ${keywordText}. ${tone} The main signal is ${focusSlot.card.names[language]} in ${focusSlot.label[language]}, and the practical exit is ${actionSlot.card.names[language]} in ${actionSlot.label[language]}. Read the cards as one sentence: what started this, what is active now, and what you can actually do next.`,
+      cardBreakdown: slots.map((slot) => createCardNarrative(slot, language)),
+      actionPlan,
+      reminder: 'Use this as a decision note, not as a verdict. The useful part is what it helps you name, test, and follow up on later.',
+      keywords,
+    };
+  }
+
+  if (language === 'ja') {
+    return {
+      headline,
+      overview: `${question ? `問いは「${question}」です。` : ''}この展開は状況を${positionText}に分けています。いちばん強いテーマは${keywordText}です。${tone}中心のサインは${focusSlot.label[language]}の${focusSlot.card.names[language]}で、現実の出口は${actionSlot.label[language]}の${actionSlot.card.names[language]}です。一枚ずつ別々に見るより、「何が始まりで、今どこが動き、次に何を試せるか」と読んでください。`,
+      cardBreakdown: slots.map((slot) => createCardNarrative(slot, language)),
+      actionPlan,
+      reminder: 'これは判決ではなく、考えを整理するためのメモです。役に立つ部分は、気づいたことを言葉にし、試し、後で振り返れることです。',
+      keywords,
+    };
+  }
+
+  return {
+    headline,
+    overview: `${question ? `你問的是：「${question}」。` : ''}這個牌陣把事情拆成${positionText}。整體最明顯的主題是${keywordText}。${tone}這次的主訊號是「${focusSlot.label[language]}」的${focusSlot.card.names[language]}，真正能落地的出口是「${actionSlot.label[language]}」的${actionSlot.card.names[language]}。所以不要只看單張牌吉凶，要把它串成一句話：事情從哪裡來，現在卡在哪裡，下一步可以怎麼試。`,
+    cardBreakdown: slots.map((slot) => createCardNarrative(slot, language)),
+    actionPlan,
+    reminder: '塔羅在這裡不是替你做決定，而是把混在一起的感受拆開。真正要帶走的是：你現在看見了什麼、哪一張牌最像你的現況、以及你下一步真的做了什麼。',
+    keywords,
+  };
+}
+
+function createCardNarrative(slot: ReadingSlot, language: Locale) {
+  const orientation = slot.reversed ? ui.reversed[language] : ui.upright[language];
+  const meaning = slot.reversed ? slot.card.shadow[language] : slot.card.meaning[language];
+  const positionText = getBeginnerPositionText(slot.slotId, language);
+  const nextMove = beginnerActions[slot.reversed ? 'reversed' : 'upright'][language];
+  const title = `${slot.label[language]}：${slot.card.names[language]}（${orientation}）`;
+
+  if (language === 'en') {
+    return {
+      slotId: slot.slotId,
+      cardId: slot.card.id,
+      title,
+      body: `${positionText} In plain words, this card says: ${meaning}`,
+      action: `Use it like this: ${nextMove}`,
+    };
+  }
+
+  if (language === 'ja') {
+    return {
+      slotId: slot.slotId,
+      cardId: slot.card.id,
+      title,
+      body: `${positionText} 簡単に言うと、このカードは「${meaning}」ということです。`,
+      action: `使い方：${nextMove}`,
+    };
+  }
+
+  return {
+    slotId: slot.slotId,
+    cardId: slot.card.id,
+    title,
+    body: `${positionText} 白話說，這張牌的意思是：${meaning}`,
+    action: `你可以這樣用它：${nextMove}`,
+  };
+}
+
+function createNarrativeHeadline(
+  focusSlot: ReadingSlot,
+  actionSlot: ReadingSlot,
+  language: Locale,
+) {
+  const focusOrientation = getSlotOrientation(focusSlot, language);
+  const actionOrientation = getSlotOrientation(actionSlot, language);
+  const focusKeyword = getPrimaryKeyword(focusSlot, language);
+  const actionKeyword = getPrimaryKeyword(actionSlot, language);
+  const focusMeaning = getSlotMeaning(focusSlot, language);
+  const actionMeaning = getSlotMeaning(actionSlot, language);
+
+  if (language === 'en') {
+    return `The clearest message comes from ${focusSlot.card.names[language]} (${focusOrientation}) in ${focusSlot.label[language]}: ${focusMeaning} The practical next step comes from ${actionSlot.card.names[language]} (${actionOrientation}) and its theme of "${actionKeyword}": ${actionMeaning}`;
+  }
+
+  if (language === 'ja') {
+    return `いちばん大事なメッセージは、${focusSlot.label[language]}の${focusSlot.card.names[language]}（${focusOrientation}）です。テーマは「${focusKeyword}」で、意味は「${focusMeaning}」。次の一歩は${actionSlot.label[language]}の${actionSlot.card.names[language]}（${actionOrientation}）が示す「${actionKeyword}」を現実に移すことです。`;
+  }
+
+  return `這組牌最直接的訊息是：「${focusSlot.label[language]}」的${focusSlot.card.names[language]}（${focusOrientation}）正在點出「${focusKeyword}」這件事：${focusMeaning} 接下來真正能動的是「${actionSlot.label[language]}」的${actionSlot.card.names[language]}（${actionOrientation}），把「${actionKeyword}」落到現實：${actionMeaning}`;
+}
+
+function createNarrativeActionPlan(
+  focusSlot: ReadingSlot,
+  actionSlot: ReadingSlot,
+  language: Locale,
+) {
+  const focusKeyword = getPrimaryKeyword(focusSlot, language);
+  const actionKeyword = getPrimaryKeyword(actionSlot, language);
+
+  if (language === 'en') {
+    return `Today, name one real-life example of "${focusKeyword}" from your situation, then choose one 15-minute action that expresses "${actionKeyword}". Keep it concrete: send one message, write one paragraph, make one list, set one boundary, or schedule one next step. Afterward, record what actually changed.`;
+  }
+
+  if (language === 'ja') {
+    return `今日はまず「${focusKeyword}」が現実のどの場面に出ているかを一つ書いてください。その後、「${actionKeyword}」を表す15分以内の行動を一つ選びます。連絡する、短く書く、リストを作る、境界線を引く、次の予定を入れる、のように具体的にしてください。終わったら実際に何が変わったかを記録します。`;
+  }
+
+  return `今天先把「${focusKeyword}」對應到一件真實發生的事，寫成一句：「我現在其實在面對____。」然後把「${actionKeyword}」變成一個 15 分鐘內能完成的動作：傳一則訊息、寫一段整理、列一張清單、劃一條界線，或安排下一個時間點。做完再記下實際變化，不要只停在想。`;
+}
+
+function getSlotOrientation(slot: ReadingSlot, language: Locale) {
+  return slot.reversed ? ui.reversed[language] : ui.upright[language];
+}
+
+function getSlotMeaning(slot: ReadingSlot, language: Locale) {
+  return slot.reversed ? slot.card.shadow[language] : slot.card.meaning[language];
+}
+
+function getPrimaryKeyword(slot: ReadingSlot, language: Locale) {
+  return slot.card.keywords[language][0] ?? slot.card.names[language];
+}
+
+function isStalePlainSummary(narrative: PlainReadingNarrative) {
+  return (
+    narrative.headline.startsWith('這次不是在叫你猜結果，而是在說：先把') ||
+    narrative.headline.startsWith('This is not mainly about predicting an outcome.') ||
+    narrative.headline.startsWith('これは未来を当てるためだけの結果ではありません。まず')
+  );
+}
+
+function getSummaryFocusSlot(slots: ReadingSlot[]) {
+  const focusOrder = ['presence', 'core', 'key', 'message', 'self', 'water'];
+  return (
+    slots.find((slot) => focusOrder.includes(slot.slotId)) ??
+    slots[Math.floor((slots.length - 1) / 2)] ??
+    slots[0]
+  );
+}
+
+function getSummaryActionSlot(slots: ReadingSlot[]) {
+  const actionOrder = ['step', 'direction', 'integration', 'invitation', 'earth', 'key'];
+  return slots.find((slot) => actionOrder.includes(slot.slotId)) ?? slots[slots.length - 1];
+}
+
+function getSummaryKeywords(slots: ReadingSlot[], language: Locale) {
+  const keywordCounts = new Map<string, number>();
+  slots.forEach((slot) => {
+    slot.card.keywords[language].forEach((keyword) => {
+      keywordCounts.set(keyword, (keywordCounts.get(keyword) ?? 0) + 1);
+    });
+  });
+
+  return Array.from(keywordCounts.entries())
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0], language))
+    .slice(0, 3)
+    .map(([keyword]) => keyword);
+}
+
+function formatSummaryKeywords(keywords: string[], language: Locale) {
+  const fallback = {
+    'zh-TW': ['現在最卡住的地方'],
+    en: ['what feels stuck right now'],
+    ja: ['今つまずいていること'],
+  }[language];
+  const sourceKeywords = keywords.length > 0 ? keywords : fallback;
+
+  if (language === 'en') {
+    return sourceKeywords.map((keyword) => `"${keyword}"`).join(', ');
+  }
+
+  return sourceKeywords.map((keyword) => `「${keyword}」`).join('、');
+}
+
+function getListSeparator(language: Locale) {
+  return language === 'en' ? ', ' : '、';
+}
+
+function getSummarySlowTone(language: Locale) {
+  return {
+    'zh-TW': '逆位比較多，代表現在有不少地方還卡住；先不要急著硬推，也不要急著替自己下結論。',
+    en: 'Because many cards are reversed, several parts are still stuck; slow down instead of forcing a conclusion.',
+    ja: '逆位置が多いので、まだ詰まっている部分があります。急いで結論を出さず、少し速度を落としてください。',
+  }[language];
+}
+
+function getSummaryMixedTone(language: Locale) {
+  return {
+    'zh-TW': '正逆位混在，代表這件事不是完全不行，也不是一路順；可以往前走，但要邊走邊校正。',
+    en: 'With both upright and reversed cards, this is neither blocked nor effortless; move forward, but adjust as you go.',
+    ja: '正位置と逆位置が混ざっているので、完全に止まっているわけでも、すべて順調なわけでもありません。進みながら調整してください。',
+  }[language];
+}
+
+function getSummaryMoveTone(language: Locale) {
+  return {
+    'zh-TW': '牌面多半順著走，代表現在不需要想太複雜；用小步驟把想法落地，比繼續猶豫更有用。',
+    en: 'The cards are mostly moving with you, so keep it simple; a small grounded step is more useful than more hesitation.',
+    ja: 'カードはおおむね流れに乗っています。考えすぎるより、小さな一歩で現実に移す方が役に立ちます。',
+  }[language];
 }
 
 function formatRecordDate(createdAt: string, language: Locale) {
@@ -1328,6 +1821,7 @@ function downloadShareCard(record: ReadingRecord, language: Locale) {
   const cards = getRecordCards(record);
   const spread = getRecordSpread(record);
   const mode = getRecordMode(record);
+  const narrative = getRecordNarrative(record, language);
   const gradient = context.createLinearGradient(0, 0, canvas.width, canvas.height);
   gradient.addColorStop(0, '#171111');
   gradient.addColorStop(0.5, '#24201b');
@@ -1350,7 +1844,13 @@ function downloadShareCard(record: ReadingRecord, language: Locale) {
 
   context.fillStyle = '#c7bdae';
   context.font = '700 28px "Segoe UI", "Noto Sans TC", sans-serif';
-  context.fillText(`${formatRecordDate(record.createdAt, language)} · ${spread.labels[language]} · ${mode.labels[language]}`, 88, 455);
+  context.fillText(
+    `${formatRecordDate(record.createdAt, language)} · ${
+      record.spreadLabel ?? spread.labels[language]
+    } · ${record.modeLabel ?? mode.labels[language]}`,
+    88,
+    455,
+  );
 
   const shareCards = cards.slice(0, 6);
   const rowCount = shareCards.length > 3 ? 2 : 1;
@@ -1400,13 +1900,12 @@ function downloadShareCard(record: ReadingRecord, language: Locale) {
     context.fillText(slot.label[language], x, y + cardHeight + 34);
   });
 
-  const summaryCard = cards[0]?.card;
   context.fillStyle = '#fff7e7';
   context.font = '700 32px "Segoe UI", "Noto Sans TC", sans-serif';
   wrapCanvasText(
     context,
-    summaryCard
-      ? summaryCard.meaning[language]
+    narrative.headline
+      ? `${narrative.headline} ${narrative.actionPlan}`
       : language === 'en'
         ? 'A small mirror for the next step.'
         : language === 'ja'
