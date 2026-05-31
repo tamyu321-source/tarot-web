@@ -77,6 +77,10 @@ button {
   border-left: 1px solid var(--line);
 }
 
+.reading-panel > * {
+  flex-shrink: 0;
+}
+
 .brand-lockup {
   display: grid;
   grid-template-columns: 48px minmax(0, 1fr);
